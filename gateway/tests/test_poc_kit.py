@@ -108,7 +108,7 @@ def test_kit_layout_permissions_and_config(tmp_path: Path) -> None:
     assert "win-01/device.key" in names and "win-01/README.txt" in names and "win-01/install-windows.ps1" in names
     assert stat.S_IMODE((out / "win-01.zip").stat().st_mode) == 0o600
     wr = (out / "win-01" / "README.txt").read_text()
-    assert "Unblock-File" in wr and "-ExecutionPolicy Bypass" in wr and "win-01" in wr and "-Collect" in wr
+    assert "Get-ChildItem -Path . -Recurse | Unblock-File" in wr and "system32" in wr and "-ExecutionPolicy Bypass" in wr and "win-01" in wr and "-Collect" in wr
     mr = (out / "mac-02" / "README.txt").read_text()
     assert "sudo bash install-macos.sh --install" in mr and "Command Line Tools" in mr
     cfg = json.loads((out / "mac-02" / "poc.json").read_text())

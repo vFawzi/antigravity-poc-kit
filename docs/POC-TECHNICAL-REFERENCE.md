@@ -267,9 +267,11 @@ Prerequisite on every laptop: the owner has **signed in once**; the laptop reach
 2. Open **Terminal (Admin)** / PowerShell as administrator:
    ```powershell
    cd C:\AGYKit\win-dev-01
-   Get-ChildItem -Recurse | Unblock-File
+   ls          # install-windows.ps1 must be listed
+   Get-ChildItem -Path . -Recurse | Unblock-File
    powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Install
    ```
+   An elevated PowerShell starts in `C:\Windows\system32`: always `cd` to the kit folder first.
 
 | Option | Effect |
 |---|---|

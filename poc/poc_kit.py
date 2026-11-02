@@ -252,8 +252,9 @@ copy it to the laptop over a secure channel and delete every copy after the inst
 
 On the laptop, as IT administrator (the device owner stays a standard user):
   1. Sign in as the owner once, then open Terminal (Admin) / PowerShell as administrator.
-  2. cd <path to this folder>
-  3. Get-ChildItem -Recurse | Unblock-File
+     An elevated PowerShell starts in C:\\Windows\\system32 - always cd to this folder first.
+  2. cd <path to this folder>          (e.g. cd C:\\AGYKit\\{device}; ls must show install-windows.ps1)
+  3. Get-ChildItem -Path . -Recurse | Unblock-File
   4. powershell -ExecutionPolicy Bypass -File .\\install-windows.ps1 -Install
      (the signed-in user is proposed as device owner; or add -User DOMAIN\\user / AzureAD\\user@corp)
      Add -Offline when the laptop is not on the VPN yet.
@@ -280,8 +281,9 @@ LTSC 2021 is supported until 12 January 2027. Plan the move to Windows 11.
 
 On the laptop, as IT administrator (the device owner stays a standard user):
   1. Sign in as the owner once, then open PowerShell as administrator.
-  2. cd <path to this folder>
-  3. Get-ChildItem -Recurse | Unblock-File
+     An elevated PowerShell starts in C:\\Windows\\system32 - always cd to this folder first.
+  2. cd <path to this folder>          (e.g. cd C:\\AGYKit\\{device}; ls must show install-windows10.ps1)
+  3. Get-ChildItem -Path . -Recurse | Unblock-File
   4. powershell -ExecutionPolicy Bypass -File .\\install-windows10.ps1 -Install
      (the signed-in user is proposed as device owner; or add -User DOMAIN\\user / AzureAD\\user@corp)
      Add -Offline when the laptop is not on the VPN yet.

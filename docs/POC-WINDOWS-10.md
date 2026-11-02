@@ -29,9 +29,12 @@ Client editions only; other builds are refused by the script.
 2. **Kits**: run `poc/poc-gateway.sh --yes`. The kit (`poc-kit/<device>.zip` and `.tar.gz`) contains `install-windows10.ps1` instead of `install-windows.ps1`.
 3. **Install** (endpoint admin, PowerShell as administrator, in the kit folder): the same as for Windows 11 ([Part C](POC-STEP-BY-STEP.md#part-c-endpoint-admin)), with the Windows 10 script:
    ```powershell
-   Get-ChildItem -Recurse | Unblock-File
+   cd C:\AGYKit\win10-dev-01
+   ls          # install-windows10.ps1 must be listed
+   Get-ChildItem -Path . -Recurse | Unblock-File
    powershell -ExecutionPolicy Bypass -File .\install-windows10.ps1 -Install
    ```
+   An elevated PowerShell starts in `C:\Windows\system32`: always `cd` to the kit folder first.
    Options: `-User`, `-Yes`, `-Offline`, `-AppControl`, `-Sysmon` (no `-AllowServer`).
 4. **Test, evidence, uninstall**: `-Test`, `-Collect`, `-Uninstall` with `install-windows10.ps1`. **0 FAIL** is what matters; V81 WARN is normal (and V74 WARN until a reboot when you used `-AppControl`).
 

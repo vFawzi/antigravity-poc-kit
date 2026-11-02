@@ -152,11 +152,14 @@ Before each install: the owner has signed in once, and the laptop is on the VPN.
 
 **C1. Windows laptop** (3–6 minutes, no reboot)
 - **Where** · the laptop, PowerShell **as administrator**, in the extracted kit folder (for example `C:\AGYKit\win-dev-01`).
-- **Do** · run these two lines:
+- **Do** · run these lines (replace `win-dev-01` with the folder where you extracted the kit):
   ```powershell
-  Get-ChildItem -Recurse | Unblock-File
+  cd C:\AGYKit\win-dev-01
+  ls          # install-windows.ps1 must be listed
+  Get-ChildItem -Path . -Recurse | Unblock-File
   powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Install
   ```
+  An elevated PowerShell starts in `C:\Windows\system32`: always `cd` to the kit folder first.
   Confirm the proposed owner with `y` (or add `-User <account>`, see [Names you will see](#names-you-will-see)). Not on the VPN yet? Add `-Offline` and test later.
 - **You should see** · `installed in <n> min (target < 10, no reboot)`, then a test table and a summary `<n> PASS, <n> WARN, 0 FAIL, <n> SKIP`. **0 FAIL** is what matters (some WARN and SKIP lines are normal in the POC).
 - **If not** · [Troubleshooting](POC-TECHNICAL-REFERENCE.md#10-troubleshooting) and [what each check means](POC-TECHNICAL-REFERENCE.md#5-endpoint-install-and-checks).

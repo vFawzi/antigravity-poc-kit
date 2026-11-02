@@ -20,9 +20,12 @@ All commands in one place, for admins who know the flow. To run the POC the firs
 
 ## Windows laptop (PowerShell as administrator, in the kit folder)
 
+An elevated PowerShell starts in `C:\Windows\system32`: always `cd` to the kit folder first. Windows 10 laptops: use `install-windows10.ps1` instead of `install-windows.ps1`.
+
 | Task | Command |
 |---|---|
-| Unblock the downloaded files | `Get-ChildItem -Recurse \| Unblock-File` |
+| Go to the kit folder | `cd C:\AGYKit\<device>` (check with `ls` that `install-windows.ps1` is there) |
+| Unblock the downloaded files | `Get-ChildItem -Path . -Recurse \| Unblock-File` |
 | Install | `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Install` (`-User <account>`, `-Yes`, `-Offline`, `-AppControl`, `-Sysmon`) |
 | Test | `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Test` |
 | Evidence | `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Collect` |
