@@ -100,6 +100,7 @@ Detailed checklists: [POC-PREREQUISITES.md](POC-PREREQUISITES.md) and [POC-PERMI
 **B1. Grant the installer role** (once)
 - **Who** · project admin. **Where** · Cloud Shell, in the POC repository folder.
 - **Do** · `install/grant-installer.sh --project my-poc-project --principal user:installer@example.com --no-evidence`
+- **First** the script enables the basic APIs on the project (Cloud Resource Manager, IAM, Service Usage) and waits for them. This needs Service Usage Admin (an Owner has it) and a linked billing account; if it can't, it prints the exact `gcloud services enable … --project my-poc-project` command to run.
 - **You should see** · the grant succeeds. It expires on its own after 8 hours: do B4–B6 within that window. Expired? Repeat B1 (safe).
 - **If not** · [Cloud permissions](POC-TECHNICAL-REFERENCE.md#2-cloud-permissions-in-detail).
 
@@ -113,7 +114,7 @@ Detailed checklists: [POC-PREREQUISITES.md](POC-PREREQUISITES.md) and [POC-PERMI
 
 **B4. Write `devices.csv`**
 - **Who** · cloud admin, with the POC lead's list. **Where** · Cloud Shell, signed in as the installer.
-- **Do** · `cp poc/devices.csv.example poc/devices.csv`, then edit it (see [Names you will see](#names-you-will-see)).
+- **Do** · `cp poc/devices.csv.example poc/devices.csv`, then **edit it**: the example contains 5 sample laptops (`win-dev-01` … `mac-ctr-01`); replace them with your own laptops, owners and personas (see [Names you will see](#names-you-will-see)). Don't keep the sample lines: each line becomes a registered device and a kit.
 - **You should see** · `python3 poc/poc_kit.py validate poc/devices.csv` prints no error.
 - **If not** · it names the line and the problem; fix and repeat.
 
@@ -129,7 +130,7 @@ Detailed checklists: [POC-PREREQUISITES.md](POC-PREREQUISITES.md) and [POC-PERMI
   | 4. Monthly budget alert, developers | `2000` |
   | 5. Monthly budget alert, contractors | `1000` |
   | 6. Path to `devices.csv` | `poc/devices.csv` (press Enter) |
-  | 7. (optional) Network | Enter = new VPC in this project (default); `2` = your existing Shared VPC, then the sub-questions in [POC-SHARED-VPC.md](POC-SHARED-VPC.md) |
+  | 7. (optional) Network: `7 Network [1/2] [1]:` | Enter = new VPC in this project (default); `2` = your existing Shared VPC: confirm the detected host project, pick the subnet by number, confirm, then the gateway IP (`auto`) and the region question ([POC-SHARED-VPC.md](POC-SHARED-VPC.md)) |
 
   Then type `yes` to accept the cost estimate.
 - **You should see** · after about 25–30 minutes: `POC gateway ready: https://gateway.agy.internal (internal IP …)` and `Device kits: poc-kit/<device>.tar.gz`.

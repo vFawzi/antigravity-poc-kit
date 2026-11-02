@@ -34,8 +34,10 @@ gcloud compute networks subnets create <poc-subnet> --project $H --network <shar
 # proxy-only subnet for regional internal load balancers (one per region per network; skip if it exists)
 gcloud compute networks subnets create <proxy-subnet> --project $H --network <shared-vpc> --region $R \
   --range <unused /26 or larger> --purpose REGIONAL_MANAGED_PROXY --role ACTIVE
+# note: the /26 must start on a /26 boundary (e.g. 10.80.255.0/26, not 10.0.0.1/26) and must not overlap other ranges in the network
 # host enabled and the POC project attached (often done already)
 gcloud compute shared-vpc enable $H
+gcloud services enable compute.googleapis.com --project $S   # Compute Engine API on the POC project first
 gcloud compute shared-vpc associated-projects add $S --host-project $H
 # the installer may use that one subnet
 gcloud compute networks subnets add-iam-policy-binding <poc-subnet> --project $H --region $R \
@@ -46,12 +48,17 @@ gcloud compute networks subnets add-iam-policy-binding <poc-subnet> --project $H
 
 | Step | You see | Answer |
 |---|---|---|
-| 7 | `7 Network [1/2]` | `2` (existing Shared VPC) |
-| 7a | `7a Host project ID` (proposed automatically when the POC project is attached) | Enter, or the host project ID |
-| — | A numbered list "Subnets you may use in <region>" | The number of the subnet (or Enter to type the values) |
-| 7b / 7c | Network name, subnet (filled in from your choice) | Enter to confirm |
-| 7e | `7e Gateway IP (auto = any free IP in the subnet, or a specific free IP)` | `auto`, or a free IP your network team gave you |
-| 7f | `7f Does your on-prem connection (VPN/Interconnect) end in another region than <region>? [y/N]` | `y` only if it does |
+| 7 | `7 Network [1/2] [1]:` | `2` (existing Shared VPC) |
+| — | `[poc] this project is attached to Shared VPC host project <host>` (when the attachment is detected) | — |
+| 7a | `7a Host project ID [<host>]:` | Enter confirms (or type the host project ID) |
+| — | `Subnets you may use in <region> (host project <host>):`, then lines such as `[1] network <network>  subnet <subnet>  <cidr>` and `m = type the values instead` | — |
+| 7c | `7c Subnet: number [1]:` | Enter picks `[1]`; or type another number; or `m` to type the values yourself |
+| 7b | `7b Shared VPC network name [<network>]:` | Enter confirms |
+| 7c | `7c Subnet name (in <region>) [<subnet>]:` | Enter confirms |
+| 7e | `7e Gateway IP (auto = any free IP in the subnet, or a specific free IP) [auto]:` | Enter (`auto`), or a free IP your network team gave you |
+| 7f | `7f Does your on-prem connection (VPN/Interconnect) end in another region than <region>? [y/N] [n]:` | `y` only if it does |
+
+If no subnet is listed you see: `no subnet of <host> usable by <account> in <region> is visible (not shared yet, or no Compute Network User on it) - type the values your network team gave you`. Then type the network and subnet names (7b, 7c), or ask the network team to finish items 2 and 4 first.
 
 The answers are saved in `poc/.state/answers.env` (`NETWORK_MODE`, `SHARED_VPC_HOST_PROJECT`, `SHARED_VPC_NETWORK`, `SHARED_VPC_SUBNET`, `GATEWAY_ILB_IP`, `ILB_GLOBAL_ACCESS`); `--yes` reuses them. `poc/poc-gateway.sh --status` shows the network and the gateway IP with TCP port 443: give these to the network team.
 

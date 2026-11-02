@@ -171,10 +171,16 @@ pick_shared_subnet() {   # numbered list of the subnets this identity may use in
     read -r h r n <<<"$(parse_subnet_url "$url")"
     printf '   [%d] network %s  subnet %s  %s\n' "$i" "$net" "$n" "$cidr"
   done
+  echo "   m = type the values instead"
   while true; do
-    read -r -p "$(printf '\033[1m%s\033[0m: ' "   Subnet for the gateway IP: number (Enter = type the values)")" pick \
+    read -r -p "$(printf '\033[1m%s\033[0m: ' "   7c Subnet: number [1]")" pick \
       || die "no answer (stdin closed) for the subnet choice"
-    [[ -z "$pick" ]] && return 0
+    pick="${pick:-1}"   # Enter = the first (often the only) subnet
+    if [[ "$pick" =~ ^[mM]$ ]]; then   # typed values: offer the network when the list shows exactly one
+      local nets; nets="$(for line in "${rows[@]}"; do IFS=$'\t' read -r url net cidr <<<"$line"; echo "$net"; done | sort -u)"
+      [[ -z "$SHARED_VPC_NETWORK" && $(wc -l <<<"$nets") -eq 1 ]] && SHARED_VPC_NETWORK="$nets"
+      return 0
+    fi
     [[ "$pick" =~ ^[0-9]+$ && $pick -ge 1 && $pick -le ${#rows[@]} ]] && break
     warn "invalid value"
   done
@@ -206,7 +212,7 @@ network_question() {
   [[ "$SHARED_VPC_HOST_PROJECT" != "$PROJECT_ID" ]] || die "the host project must be the Shared VPC host project, not $PROJECT_ID"
   [[ $YES -eq 1 ]] || pick_shared_subnet
   ask SHARED_VPC_NETWORK "   7b Shared VPC network name" "" "$NAME_RE"
-  ask SHARED_VPC_SUBNET "   7c Subnet for the gateway IP (in $REGION)" "" "$NAME_RE"
+  ask SHARED_VPC_SUBNET "   7c Subnet name (in $REGION)" "" "$NAME_RE"
   GW_IP_ANSWER="${GATEWAY_ILB_IP:-auto}"
   ask GW_IP_ANSWER "   7e Gateway IP (auto = any free IP in the subnet, or a specific free IP)" "auto" "^auto\$|$IP_RE"
   GATEWAY_ILB_IP="$([[ "$GW_IP_ANSWER" == "auto" ]] && echo "" || echo "$GW_IP_ANSWER")"

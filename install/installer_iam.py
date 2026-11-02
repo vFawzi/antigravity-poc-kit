@@ -55,12 +55,44 @@ HELP_ORG = """Folder / organization level:
   * Nothing else is needed above the project. Org policies that block resources are reported by the preflight;
     creating the project / linking billing is out of scope (create the project first)."""
 
+os.environ["CLOUDSDK_CORE_DISABLE_PROMPTS"] = "1"   # a hidden gcloud prompt (output captured) would hang the grant
+BOOTSTRAP_APIS = ("cloudresourcemanager.googleapis.com", "iam.googleapis.com", "serviceusage.googleapis.com")
+BOOTSTRAP_WAIT_TRIES, BOOTSTRAP_WAIT_SECONDS = 12, 10   # ~2 min for a freshly enabled API to answer
+SLEEP = time.sleep
+
 if sys.platform == "darwin" and not os.environ.get("SSL_CERT_FILE") and os.path.exists("/etc/ssl/cert.pem"):
     os.environ["SSL_CERT_FILE"] = "/etc/ssl/cert.pem"
 
 
 def token() -> str:
-    return subprocess.check_output(["gcloud", "auth", "print-access-token"], text=True).strip()
+    return subprocess.check_output(["gcloud", "auth", "print-access-token", "--quiet"], text=True,
+                                   stdin=subprocess.DEVNULL, timeout=120).strip()
+
+
+def enable_bootstrap_apis(project: str) -> None:
+    """Greenfield projects: Cloud Resource Manager / IAM / Service Usage are off, and every later call needs them.
+    Enabled as the admin with gcloud (works before any API of the project is on), then wait until they answer."""
+    print(f"[grant] enabling bootstrap APIs on {project} (Cloud Resource Manager, IAM, Service Usage)")
+    cmd = ["gcloud", "services", "enable", *BOOTSTRAP_APIS, "--project", project, "--quiet"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=600)
+        rc, err = r.returncode, (r.stderr or r.stdout).strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        rc, err = 1, str(e)
+    if rc != 0:
+        raise SystemExit(f"cannot enable the bootstrap APIs on {project}: {err[-400:]}\n"
+                         f"  Ask someone with roles/serviceusage.serviceUsageAdmin on the project (and a linked billing\n"
+                         f"  account) to run:\n    {' '.join(cmd[:-1])}\n  then re-run this command.")
+    for i in range(1, BOOTSTRAP_WAIT_TRIES + 1):
+        try:
+            api("POST", f"https://cloudresourcemanager.googleapis.com/v1/projects/{project}:testIamPermissions", project,
+                {"permissions": ["resourcemanager.projects.get"]}, attempts=1)
+            return
+        except SystemExit as e:
+            if i == BOOTSTRAP_WAIT_TRIES or not any(k in str(e) for k in ("SERVICE_DISABLED", "has not been used", "it is disabled")):
+                raise
+            print(f"[grant] APIs not ready yet on {project} (enablement propagating) - retry {i}/{BOOTSTRAP_WAIT_TRIES}")
+            SLEEP(BOOTSTRAP_WAIT_SECONDS)
 
 
 def api(method: str, url: str, project: str, body: dict[str, Any] | None = None, attempts: int = 5) -> dict[str, Any]:
@@ -180,9 +212,8 @@ def ours(b: dict[str, Any], project: str) -> bool:
 
 
 def grant(a: argparse.Namespace) -> None:
+    enable_bootstrap_apis(a.project)   # before any project call (greenfield: Cloud Resource Manager is off)
     check_admin(a.project)
-    for svc in ("iam.googleapis.com", "cloudresourcemanager.googleapis.com", "serviceusage.googleapis.com"):
-        api("POST", f"https://serviceusage.googleapis.com/v1/projects/{a.project}/services/{svc}:enable", a.project, {})
     perms, other = wanted_permissions(a.project)
     print(f"project {a.project}: {len(perms)} permissions in the custom role; via predefined role: {', '.join(other) or '-'}")
     role = upsert_role(a.project, perms)

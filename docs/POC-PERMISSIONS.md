@@ -18,6 +18,8 @@ Never Owner or Editor. Choose one option; the installer's preflight checks every
 
 IAM propagation after the grant takes about 2–5 minutes and is intermittent at first (some calls pass, some get `403`): wait a few minutes before `poc/poc-gateway.sh`. Terraform apply is retried 3 times automatically; if a `403` persists, re-run `poc/poc-gateway.sh --yes` (idempotent).
 
+Before the grant, the script enables the bootstrap APIs on the project (Cloud Resource Manager, IAM, Service Usage) and waits for them; this needs Service Usage Admin (`roles/serviceusage.serviceUsageAdmin`; an Owner has it) and a linked billing account. If it can't, it prints the exact `gcloud services enable … --project <id>` command.
+
 The administrator who grants needs project IAM and role administration (`resourcemanager.projects.setIamPolicy`, `iam.roles.*`) and `serviceusage.services.enable`.
 
 **Option B: predefined roles on the project.**
