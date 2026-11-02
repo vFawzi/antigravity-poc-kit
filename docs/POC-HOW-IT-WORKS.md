@@ -45,6 +45,11 @@ flowchart LR
 - **What the user notices:** with application control on, programs outside approved locations may be blocked.
 - **Where it is configured:** the install options `-AppControl` and `-Sysmon`.
 
+### Windows 10 laptops
+- **What it does:** a separate script (`install-windows10.ps1`) installs the same controls on Windows 10 as a short-term mitigation. Windows 10 has no terminal sandbox, so the agent runs in approval mode.
+- **What the user notices:** every agent command needs approval, except allow-listed read-only commands.
+- **Where it is configured:** `os` = `windows10` in `devices.csv`; see [POC-WINDOWS-10.md](POC-WINDOWS-10.md).
+
 ### Remote Desktop rule (Windows)
 - **What it does:** Remote Desktop stays available to administrators (for remote support) but is denied to the persona groups.
 - **What the user notices:** the device owner can't sign in through Remote Desktop.
@@ -60,7 +65,7 @@ flowchart LR
 ### Certificate authority and internal load balancer
 - **What it does:** a private certificate authority issues one certificate per laptop. The internal load balancer, reachable only through your VPN, accepts only connections with a valid certificate from that authority.
 - **What the user notices:** nothing; without the VPN, Antigravity can't reach the models.
-- **Where it is configured:** created by `poc/poc-gateway.sh`; certificate lifetime 1–30 days (default 30).
+- **Where it is configured:** created by `poc/poc-gateway.sh`; certificate lifetime 1–30 days (default 30). The load balancer's IP is in a new POC network, or in a subnet of your Shared VPC (question 7, [POC-SHARED-VPC.md](POC-SHARED-VPC.md)).
 
 ### Device registry
 - **What it does:** the gateway accepts only laptops listed in `devices.csv` and takes the owner and persona from that list, not from the laptop. A laptop removed from the list is refused at once.

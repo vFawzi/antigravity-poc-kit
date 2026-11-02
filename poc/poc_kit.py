@@ -21,7 +21,7 @@
                       [--device-settings JSON]   (terraform output device_settings_by_mode, gateway entry)
   poc_kit.py status   DEVICES_CSV --out DIR
 
-devices.csv columns: device,owner,persona,os  (persona: dev | contractor; os: windows | macos)
+devices.csv columns: device,owner,persona,os  (persona: dev | contractor; os: windows | windows10 | macos)
 """
 from __future__ import annotations
 
@@ -43,7 +43,10 @@ from pathlib import Path
 DEVICE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,62}$")
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")
 PERSONAS = {"dev": "agy-dev", "contractor": "agy-contractor"}
-OS_SCRIPTS = {"windows": "install-windows.ps1", "macos": "install-macos.sh"}   # Linux: no POC endpoint script yet
+OS_SCRIPTS = {"windows": "install-windows.ps1", "windows10": "install-windows10.ps1",   # Linux: no POC endpoint script yet
+              "macos": "install-macos.sh"}
+# Windows 11 and Windows 10 (short-term: no terminal sandbox, approval mode) share the Windows bundle and client
+WINDOWS_OS = ("windows", "windows10")
 KIT_SCHEMA = "agy-poc-kit/1"
 POC_DIR = Path(__file__).resolve().parent
 REPO = POC_DIR.parent
@@ -93,7 +96,8 @@ def read_devices(path: Path) -> list[Device]:
         d = Device(*(c.strip() for c in row))
         d = Device(d.device.lower(), d.owner, d.persona.lower(), d.os.lower())
         if not DEVICE_RE.match(d.device):
-            errors.append(f"line {n}: device '{d.device}' must match {DEVICE_RE.pattern}")
+            errors.append(f"line {n}: device '{d.device}' must be lowercase letters, digits, '.', '_' or '-' (2-63 characters), "
+                          "e.g. the laptop's short hostname in lowercase; an FQDN also works up to 63 characters")
         if d.device in seen:
             errors.append(f"line {n}: duplicate device '{d.device}'")
         if not EMAIL_RE.match(d.owner):
@@ -126,8 +130,46 @@ def read_prices(path: Path | None) -> dict[str, dict[str, float]]:
         raise KitError(f"{path}: invalid price file ({e})") from e
 
 
+@dataclass(frozen=True)
+class Network:
+    """Question 7: where the gateway load balancer IP lives (create = new VPC here, shared = Shared VPC subnet)."""
+    mode: str = "create"
+    host_project: str = ""
+    network: str = ""
+    subnet: str = ""
+    gateway_ip: str = ""
+    global_access: bool = False
+
+
+_PROJECT_RE = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
+_NAME_RE = re.compile(r"^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$")
+_IPV4_RE = re.compile(r"^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$")
+
+
+def render_network(net: Network) -> list[str]:
+    """tfvars lines for question 7; create mode without extras renders nothing (= today's behaviour)."""
+    if net.mode not in ("create", "shared"):
+        raise KitError(f"network mode '{net.mode}' must be create or shared")
+    if net.gateway_ip and not _IPV4_RE.match(net.gateway_ip):
+        raise KitError(f"gateway IP '{net.gateway_ip}' is not an IPv4 address")
+    lines: list[str] = []
+    if net.mode == "shared":
+        if not _PROJECT_RE.match(net.host_project):
+            raise KitError(f"Shared VPC host project '{net.host_project}' is not a valid project ID")
+        for what, v in (("network", net.network), ("subnet", net.subnet)):
+            if not _NAME_RE.match(v):
+                raise KitError(f"Shared VPC {what} '{v}' must be a name (lowercase letters, digits, hyphens), not a URL")
+        lines += ["network_mode            = \"shared\"", f"shared_vpc_host_project = {hcl_str(net.host_project)}",
+                  f"shared_vpc_network      = {hcl_str(net.network)}", f"shared_vpc_subnet       = {hcl_str(net.subnet)}"]
+    if net.gateway_ip:
+        lines.append(f"gateway_ilb_ip          = {hcl_str(net.gateway_ip)}")
+    if net.global_access:
+        lines.append("ilb_global_access       = true")
+    return lines + [""] if lines else []
+
+
 def render_tfvars(devices: list[Device], billing_account: str, budgets: dict[str, float],
-                  prices: dict[str, dict[str, float]] | None = None) -> str:
+                  prices: dict[str, dict[str, float]] | None = None, network: Network | None = None) -> str:
     unknown = set(budgets) - set(PERSONAS)
     if unknown:
         raise KitError(f"budget for unknown persona(s): {', '.join(sorted(unknown))}")
@@ -148,6 +190,7 @@ def render_tfvars(devices: list[Device], billing_account: str, budgets: dict[str
             raise KitError(f"price for {m} must be >= 0")
         lines.append(f"  {hcl_str(m)} = {{ input = {p['input']:g}, output = {p['output']:g} }}")
     lines += ["}", ""]
+    lines += render_network(network or Network())
     return "\n".join(lines)
 
 
@@ -225,6 +268,34 @@ Attack pack (live scenarios, after -Test passes; see attack-pack\\README.md): be
             attack-pack folder to the owner's profile (never device.key), then as the owner:
             cd attack-pack; & "C:\\Program Files\\Python312\\python.exe" runner.py run --mode live --os windows --persona {persona} --out results\\
 """,
+    "windows10": """Antigravity POC - device kit {device} ({persona}, Windows 10)
+=======================================================================
+This folder contains the device certificate and private key for {device}. Keep it confidential:
+copy it to the laptop over a secure channel and delete every copy after the installation.
+Windows 10 21H2 / Enterprise LTSC 2021 (build 19044) or 22H2 (build 19045) only (short-term). Windows 10 has no
+terminal sandbox: approval mode is active, so every agent command needs the owner's approval (allow-listed read-only
+commands excepted).
+End of support: Windows 10 22H2 ended on 14 October 2025 (use Extended Security Updates, ESU); Windows 10 Enterprise
+LTSC 2021 is supported until 12 January 2027. Plan the move to Windows 11.
+
+On the laptop, as IT administrator (the device owner stays a standard user):
+  1. Sign in as the owner once, then open PowerShell as administrator.
+  2. cd <path to this folder>
+  3. Get-ChildItem -Recurse | Unblock-File
+  4. powershell -ExecutionPolicy Bypass -File .\\install-windows10.ps1 -Install
+     (the signed-in user is proposed as device owner; or add -User DOMAIN\\user / AzureAD\\user@corp)
+     Add -Offline when the laptop is not on the VPN yet.
+  5. Ask the owner to sign out and in once.
+
+Check:      powershell -ExecutionPolicy Bypass -File .\\install-windows10.ps1 -Test
+Evidence:   powershell -ExecutionPolicy Bypass -File .\\install-windows10.ps1 -Collect
+            -> send C:\\ProgramData\\AntigravityPOC\\collect-*.zip to the POC team
+Remove:     powershell -ExecutionPolicy Bypass -File .\\install-windows10.ps1 -Uninstall
+
+Attack pack (live scenarios, after -Test passes; see attack-pack\\README.md): before deleting this kit, copy ONLY the
+            attack-pack folder to the owner's profile (never device.key), then as the owner:
+            cd attack-pack; & "C:\\Program Files\\Python312\\python.exe" runner.py run --mode live --os windows --persona {persona} --out results\\
+""",
     "macos": """Antigravity POC - device kit {device} ({persona}, macOS)
 ==================================================================
 This folder contains the device certificate and private key for {device}. Keep it confidential:
@@ -289,7 +360,7 @@ def build_kit(devices: list[Device], certs: Path, out: Path, gateway_url: str, g
         if script.is_file():
             shutil.copyfile(script, kd / script.name)
             os.chmod(kd / script.name, 0o700)
-        if d.os == "windows":
+        if d.os in WINDOWS_OS:
             copy_windows_bundle(kd)
         elif d.os == "macos":
             copy_macos_bundle(kd)
@@ -307,7 +378,7 @@ def build_kit(devices: list[Device], certs: Path, out: Path, gateway_url: str, g
                             "not_after": cert_not_after(crt)},
             "hook": {"critical": "enforce", "noisy": hook_noisy,
                      "audit_classes": NOISY_HOOK_CLASSES if hook_noisy == "audit" else []},
-            "client": {"version_policy": "latest-tested", **(WINDOWS_CLIENT if d.os == "windows" else {})},
+            "client": {"version_policy": "latest-tested", **(WINDOWS_CLIENT if d.os in WINDOWS_OS else {})},
             # hosts sinkholes for direct model endpoints and tunnels (forces the gateway path); no egress allowlist
             "hosts_pin": (device_settings or {}).get("agy-hosts-pin", ""),
             "layers": {"app_control": False, "sysmon": False, "egress_firewall": False, "rdp": "admins"},
@@ -322,7 +393,7 @@ def build_kit(devices: list[Device], certs: Path, out: Path, gateway_url: str, g
             t.add(kd, arcname=d.device)
         os.chmod(archive, 0o600)
         archives.append(archive)
-        if d.os == "windows":   # Windows: a zip opens in Explorer without extra tools
+        if d.os in WINDOWS_OS:   # Windows: a zip opens in Explorer without extra tools
             zpath = out / f"{d.device}.zip"
             with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
                 for f in sorted(kd.rglob("*")):
@@ -375,6 +446,12 @@ def main(argv: list[str]) -> int:
     t.add_argument("--budget", action="append", default=[])
     t.add_argument("--prices", type=Path, default=None)
     t.add_argument("--out", type=Path, required=True)
+    t.add_argument("--network-mode", choices=("create", "shared"), default="create")
+    t.add_argument("--shared-vpc-host-project", default="")
+    t.add_argument("--shared-vpc-network", default="")
+    t.add_argument("--shared-vpc-subnet", default="")
+    t.add_argument("--gateway-ilb-ip", default="")
+    t.add_argument("--ilb-global-access", choices=("true", "false"), default="false")
     k = sub.add_parser("kit")
     k.add_argument("csv", type=Path)
     k.add_argument("--certs", type=Path, required=True)
@@ -395,7 +472,9 @@ def main(argv: list[str]) -> int:
             by = {p: sum(1 for d in devices if d.persona == p) for p in PERSONAS}
             print(f"{len(devices)} devices OK ({', '.join(f'{n} {p}' for p, n in by.items())})")
         elif a.cmd == "tfvars":
-            a.out.write_text(render_tfvars(devices, a.billing_account, parse_budgets(a.budget), read_prices(a.prices)))
+            net = Network(a.network_mode, a.shared_vpc_host_project, a.shared_vpc_network, a.shared_vpc_subnet,
+                          a.gateway_ilb_ip, a.ilb_global_access == "true")
+            a.out.write_text(render_tfvars(devices, a.billing_account, parse_budgets(a.budget), read_prices(a.prices), net))
             print(f"wrote {a.out}")
         elif a.cmd == "kit":
             for arc in build_kit(devices, a.certs, a.out, a.gateway_url, a.gateway_ip, a.project, a.region,

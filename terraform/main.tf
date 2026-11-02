@@ -66,6 +66,7 @@ locals {
     "dlp.googleapis.com", "privilegedaccessmanager.googleapis.com", "pubsub.googleapis.com", "cloudidentity.googleapis.com",
   ]
   budgets_on = var.billing_account != "" && length(var.persona_budgets) > 0
+  shared_vpc = var.network_mode == "shared"
 }
 
 resource "google_project_service" "svc" {
@@ -97,6 +98,7 @@ module "security" {
 }
 
 module "network" {
+  count             = local.shared_vpc ? 0 : 1
   source            = "./modules/network"
   project_id        = var.project_id
   region            = var.region
@@ -105,6 +107,32 @@ module "network" {
   enable_rdp        = var.desktop_access == "xrdp" || var.deploy_windows_workstation
   egress_restricted = var.vpc_egress_restricted
   depends_on        = [google_project_service.svc]
+}
+
+# network_mode = shared: the gateway load balancer IP comes from a subnet your network team shares with this project.
+# Read-only lookup in the host project (needs compute.subnetworks.get on that subnet = Compute Network User on the
+# subnet); nothing in the host project is created or changed by this stack.
+data "google_compute_subnetwork" "shared" {
+  count   = local.shared_vpc ? 1 : 0
+  project = var.shared_vpc_host_project
+  region  = var.region
+  name    = var.shared_vpc_subnet
+  lifecycle {
+    precondition {
+      condition     = var.shared_vpc_host_project != "" && var.shared_vpc_network != "" && var.shared_vpc_subnet != ""
+      error_message = "network_mode = \"shared\" needs shared_vpc_host_project, shared_vpc_network and shared_vpc_subnet."
+    }
+    postcondition {
+      condition     = basename(self.network) == var.shared_vpc_network
+      error_message = "The shared subnet does not belong to the Shared VPC network named in shared_vpc_network (check the subnet and network names with your network team)."
+    }
+  }
+}
+
+locals {
+  # one network reference for both modes (one() = null instead of an index error for the mode that is off)
+  network_id = local.shared_vpc ? one(data.google_compute_subnetwork.shared[*].network) : one(module.network[*].network_id)
+  subnet_id  = local.shared_vpc ? one(data.google_compute_subnetwork.shared[*].self_link) : one(module.network[*].subnet_id)
 }
 
 module "gateway" {
@@ -166,7 +194,7 @@ module "workstation" {
   prefix                 = local.p
   suffix                 = random_id.suffix.hex
   kms_key                = module.security.kms_key
-  subnet_id              = module.network.subnet_id
+  subnet_id              = local.subnet_id
   operator_principals    = var.operator_principals
   machine_type           = var.machine_type
   boot_disk_gb           = var.boot_disk_gb
@@ -234,7 +262,7 @@ module "workstation_windows" {
   prefix               = local.p
   suffix               = random_id.suffix.hex
   kms_key              = module.security.kms_key
-  subnet_id            = module.network.subnet_id
+  subnet_id            = local.subnet_id
   operator_principals  = var.operator_principals
   image                = var.windows_image
   machine_type         = var.windows_machine_type
@@ -285,7 +313,7 @@ module "image_pipeline" {
   source        = "./modules/image_pipeline"
   project_id    = var.project_id
   prefix        = local.p
-  network_id    = module.network.network_id
+  network_id    = local.network_id
   repo_region   = var.region
   repo_name     = "${local.p}-images"
   source_bucket = module.gateway.build_bucket
@@ -341,9 +369,13 @@ module "mtls" {
   prefix                  = local.p
   suffix                  = random_id.suffix.hex
   template_name_suffix    = var.cas_template_suffix
-  network_id              = module.network.network_id
-  subnet_id               = module.network.subnet_id
+  network_id              = local.network_id
+  subnet_id               = local.subnet_id
   proxy_subnet_cidr       = var.proxy_subnet_cidr
+  create_proxy_subnet     = !local.shared_vpc # Shared VPC: the host network's proxy-only subnet is used automatically
+  create_dns_zone         = !local.shared_vpc # Shared VPC: devices pin the name (no zone binding in the host project)
+  ilb_ip                  = var.gateway_ilb_ip
+  global_access           = var.ilb_global_access
   cloud_run_service       = module.gateway.service_name
   gateway_hostname        = var.gateway_mtls_hostname
   dns_zone_domain         = var.internal_dns_domain
@@ -400,6 +432,36 @@ module "seat_perimeter" {
 moved {
   from = module.workstation
   to   = module.workstation[0]
+}
+
+# the own VPC became optional (network_mode = shared): keep the existing state address
+moved {
+  from = module.network
+  to   = module.network[0]
+}
+
+# Shared VPC mode: only the gateway front door lives in the shared subnet. Workstation VMs, the Windows image pipeline
+# and other workloads that need this stack's own VPC are out of scope in that mode.
+resource "terraform_data" "network_guard" {
+  input = { network_mode = var.network_mode }
+  lifecycle {
+    precondition {
+      condition     = !local.shared_vpc || (var.shared_vpc_host_project != "" && var.shared_vpc_network != "" && var.shared_vpc_subnet != "")
+      error_message = "network_mode = \"shared\" needs shared_vpc_host_project, shared_vpc_network and shared_vpc_subnet."
+    }
+    precondition {
+      condition     = !local.shared_vpc || var.shared_vpc_host_project != var.project_id
+      error_message = "shared_vpc_host_project must be the Shared VPC host project, not this (service) project."
+    }
+    precondition {
+      condition     = !local.shared_vpc || !(var.deploy_workstation || var.deploy_windows_workstation || var.enable_windows_image_pipeline)
+      error_message = "network_mode = \"shared\" supports the gateway profile only: set deploy_workstation, deploy_windows_workstation and enable_windows_image_pipeline to false (reference workstations need this stack's own VPC)."
+    }
+    precondition {
+      condition     = !local.shared_vpc || var.enable_mtls
+      error_message = "network_mode = \"shared\" places the gateway's internal mTLS load balancer in the shared subnet: it needs enable_mtls = true."
+    }
+  }
 }
 
 # cross-variable guardrails (fail the plan, never deploy a gateway no client can reach)

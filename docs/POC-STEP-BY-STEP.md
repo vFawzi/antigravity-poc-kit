@@ -23,10 +23,10 @@ mac-dev-01,developer2@example.com,dev,macos
 
 | Column | Meaning |
 |---|---|
-| `device` | A short name for the laptop: lowercase letters, digits, `.`, `_`, `-`; unique. It becomes the name on the laptop's certificate |
+| `device` | A free label for the laptop, unique: lowercase letters, digits, `.`, `_`, `-`, 2–63 characters. Use the laptop's short host name in lowercase (a full name like `laptop1.corp.example.com` also works up to 63 characters). It becomes the name on the laptop's certificate; the certificate has no DNS name and nothing depends on domain membership |
 | `owner` | The owner's e-mail address. The gateway logs every model call under this name |
 | `persona` | `dev` or `contractor` |
-| `os` | `windows` or `macos` (Linux laptops are not part of the POC yet) |
+| `os` | `windows` (Windows 11), `windows10` (see [POC-WINDOWS-10.md](POC-WINDOWS-10.md)) or `macos` (Linux laptops are not part of the POC yet) |
 
 **Groups.** The same persona appears under three names. They always match, because they all come from the same kit:
 
@@ -51,7 +51,7 @@ Directory groups (Active Directory or Entra ID) are not used in the POC.
 | Name | What it is |
 |---|---|
 | `agy-gateway` | The gateway (Cloud Run service) and its service account |
-| `gateway.agy.internal` | The gateway's internal name; laptops reach it over your VPN |
+| `gateway.agy.internal` | The gateway's internal name; laptops reach it over your VPN. Its IP comes from the POC network, or from your subnet with a Shared VPC ([POC-SHARED-VPC.md](POC-SHARED-VPC.md)) |
 | `my-poc-project-agy-tfstate` | Installer state (storage bucket), encrypted with key ring `agy-tfstate-ring` |
 | `agy-ring-<suffix>` | Encryption keys (KMS key ring) |
 | `agy-security`, `agy-audit`, `agy-siem` | Log buckets (security events, audit logs, SIEM) |
@@ -72,10 +72,20 @@ Detailed checklists: [POC-PREREQUISITES.md](POC-PREREQUISITES.md) and [POC-PERMI
 | POC lead | The list of laptops, owners and personas (for `devices.csv`); privacy / works council sign-off; the success criteria agreed with your Google contact before the start |
 | Cloud admin | A new Google Cloud project (for example `my-poc-project`) linked to a billing account; Cloud Shell access; a group e-mail for alerts |
 | Billing admin | Can add a role on the billing account |
-| Network / VPN team | A site-to-site VPN into the project's network, ending in the same region as the gateway; laptops (also remote ones) reach it on port 443; no TLS inspection on that path |
+| Network / VPN team | A VPN or Interconnect to the POC network (or a subnet of your Shared VPC, see [POC-SHARED-VPC.md](POC-SHARED-VPC.md)); see the network requirements below |
 | Endpoint admin | Local administrator on every laptop; Windows 11 24H2 or later, or macOS 14 or later; on Macs the Command Line Tools (`xcode-select --install`); owners are standard users and have signed in once. Nothing else is needed on Windows: the script installs Python 3.12 and the Antigravity client itself |
 
 ---
+
+**Network requirements**
+
+| Need | Detail |
+|---|---|
+| Laptops → gateway | Only TCP 443 to the gateway IP, over your VPN or Interconnect (also for remote workers) |
+| TLS inspection | None on that path |
+| DNS | Not needed: the install pins the gateway name in the laptop's hosts file |
+| Internet during the install | Windows: `www.python.org` and `storage.googleapis.com` (plus `download.sysinternals.com` only with `-Sysmon`; optional `github.com` for Windows Terminal: if blocked, the install continues with a warning). Mac: `storage.googleapis.com` and the Google-hosted Antigravity CLI release manifest |
+| What to give the network team | `poc/poc-gateway.sh --status` prints the gateway IP and port (TCP 443) after step B5 |
 
 ## Part B. Cloud admin
 
@@ -109,7 +119,7 @@ Detailed checklists: [POC-PREREQUISITES.md](POC-PREREQUISITES.md) and [POC-PERMI
 
 **B5. Deploy the gateway and create the kits**
 - **Who** · the installer identity (`installer@example.com`): open Cloud Shell signed in as that user. **Where** · Cloud Shell, in the repository folder. Working from your own laptop instead? See [admin laptop setup](POC-TECHNICAL-REFERENCE.md#2-cloud-permissions-in-detail).
-- **Do** · `poc/poc-gateway.sh`, then answer:
+- **Do** · `poc/poc-gateway.sh`, then answer the 6 questions (and the optional question 7):
 
   | Question | Example |
   |---|---|
@@ -119,10 +129,11 @@ Detailed checklists: [POC-PREREQUISITES.md](POC-PREREQUISITES.md) and [POC-PERMI
   | 4. Monthly budget alert, developers | `2000` |
   | 5. Monthly budget alert, contractors | `1000` |
   | 6. Path to `devices.csv` | `poc/devices.csv` (press Enter) |
+  | 7. (optional) Network | Enter = new VPC in this project (default); `2` = your existing Shared VPC, then the sub-questions in [POC-SHARED-VPC.md](POC-SHARED-VPC.md) |
 
   Then type `yes` to accept the cost estimate.
 - **You should see** · after about 25–30 minutes: `POC gateway ready: https://gateway.agy.internal (internal IP …)` and `Device kits: poc-kit/<device>.tar.gz`.
-- **If not** · a permission error at the start: wait a few minutes and run `poc/poc-gateway.sh --yes` (safe to repeat). Other errors: [Troubleshooting](POC-TECHNICAL-REFERENCE.md#10-troubleshooting).
+- **If not** · a permission error at the start: wait a few minutes and run `poc/poc-gateway.sh --yes` (safe to repeat). Preflight `org policy run.managed.requireInvokerIam` FAIL: an organisation policy administrator adds a project exception ([how](POC-TECHNICAL-REFERENCE.md#organisation-policy-runmanagedrequireinvokeriam)). Other errors: [Troubleshooting](POC-TECHNICAL-REFERENCE.md#10-troubleshooting).
 
 **B6. Check**
 - **Do** · `poc/poc-gateway.sh --status`
@@ -150,6 +161,8 @@ Before each install: the owner has signed in once, and the laptop is on the VPN.
 - **If not** · [Troubleshooting](POC-TECHNICAL-REFERENCE.md#10-troubleshooting) and [what each check means](POC-TECHNICAL-REFERENCE.md#5-endpoint-install-and-checks).
 
 Test again at any time: `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Test`
+
+**Windows 10 laptop** (`os` = `windows10`): the same steps with `install-windows10.ps1`; the agent then asks approval for every command. See [POC-WINDOWS-10.md](POC-WINDOWS-10.md).
 
 **C2. Mac** (a few minutes, no reboot)
 - **Where** · the Mac, Terminal with an administrator account.
@@ -194,6 +207,7 @@ What each part does: [POC-HOW-IT-WORKS.md](POC-HOW-IT-WORKS.md). To change a set
 
 **D3. Attack-pack tests**
 - The owner runs the tests from the `attack-pack` folder (commands in [POC-USER-GUIDE.md](POC-USER-GUIDE.md)); the cloud admin can run the automated part in Cloud Shell. Details: [attack pack](POC-TECHNICAL-REFERENCE.md#6-running-the-poc-saved-queries-attack-pack-enforce-evidence).
+- Scenario A25 checks that other people on the laptop can't use the local proxy: run it as a local user who is in neither persona group.
 - **You should see** · all critical scenarios blocked, at least 95 % of the attacks blocked or flagged, normal work allowed.
 
 **D4. Add, remove or renew a laptop** (cloud admin, then endpoint admin)

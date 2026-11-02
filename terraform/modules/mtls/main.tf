@@ -24,6 +24,26 @@ variable "template_name_suffix" {
 variable "network_id" { type = string }
 variable "subnet_id" { type = string }
 variable "proxy_subnet_cidr" { type = string }
+variable "create_proxy_subnet" {
+  description = "Create the proxy-only subnet (own VPC). false = Shared VPC: the host network's proxy-only subnet in the region is used automatically."
+  type        = bool
+  default     = true
+}
+variable "create_dns_zone" {
+  description = "Create the private DNS zone for the gateway name (own VPC). false = Shared VPC: devices pin the name to the load balancer IP."
+  type        = bool
+  default     = true
+}
+variable "ilb_ip" {
+  description = "Static internal IP for the load balancer (empty = any free IP in the subnet)."
+  type        = string
+  default     = ""
+}
+variable "global_access" {
+  description = "Allow clients in other regions to reach the internal load balancer."
+  type        = bool
+  default     = false
+}
 variable "cloud_run_service" { type = string }
 variable "gateway_hostname" { type = string }
 variable "dns_zone_domain" { type = string }
@@ -406,6 +426,7 @@ resource "google_network_security_server_tls_policy" "mtls" {
 
 # ----------------------------------------------------------------- regional internal Application Load Balancer
 resource "google_compute_subnetwork" "proxy_only" {
+  count         = var.create_proxy_subnet ? 1 : 0
   project       = var.project_id
   name          = "${var.prefix}-proxy-only-${var.region}"
   region        = var.region
@@ -497,6 +518,7 @@ resource "google_compute_address" "gw" {
   region       = var.region
   subnetwork   = var.subnet_id
   address_type = "INTERNAL"
+  address      = var.ilb_ip == "" ? null : var.ilb_ip
 }
 
 resource "google_compute_forwarding_rule" "gw" {
@@ -509,12 +531,14 @@ resource "google_compute_forwarding_rule" "gw" {
   ip_address            = google_compute_address.gw.address
   ip_protocol           = "TCP"
   port_range            = "443"
+  allow_global_access   = var.global_access
   target                = google_compute_region_target_https_proxy.gw.id
   depends_on            = [google_compute_subnetwork.proxy_only]
 }
 
-# ----------------------------------------------------------------- private DNS
+# ----------------------------------------------------------------- private DNS (own VPC only)
 resource "google_dns_managed_zone" "internal" {
+  count      = var.create_dns_zone ? 1 : 0
   project    = var.project_id
   name       = "${var.prefix}-internal"
   dns_name   = "${var.dns_zone_domain}."
@@ -527,12 +551,27 @@ resource "google_dns_managed_zone" "internal" {
 }
 
 resource "google_dns_record_set" "gw" {
+  count        = var.create_dns_zone ? 1 : 0
   project      = var.project_id
-  managed_zone = google_dns_managed_zone.internal.name
+  managed_zone = google_dns_managed_zone.internal[0].name
   name         = "${var.gateway_hostname}."
   type         = "A"
   ttl          = 300
   rrdatas      = [google_compute_address.gw.address]
+}
+
+# proxy-only subnet and private DNS became optional (network_mode = shared): keep existing state addresses
+moved {
+  from = google_compute_subnetwork.proxy_only
+  to   = google_compute_subnetwork.proxy_only[0]
+}
+moved {
+  from = google_dns_managed_zone.internal
+  to   = google_dns_managed_zone.internal[0]
+}
+moved {
+  from = google_dns_record_set.gw
+  to   = google_dns_record_set.gw[0]
 }
 
 output "gateway_mtls_url" { value = "https://${var.gateway_hostname}" }

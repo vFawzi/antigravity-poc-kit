@@ -28,7 +28,7 @@ A catalogue of the settings you may want to change during the POC, each with the
 | Models and AI checks | [10 Models per persona](#10-models-per-persona) · [11 Model Armor](#11-model-armor) · [12 Sensitive data types](#12-sensitive-data-types-and-sensitivity) · [13 Mask or block](#13-mask-or-block-sensitive-data-pci-scope) · [14 Blocked prompt topics](#14-blocked-prompt-topics-and-the-ai-classifier) |
 | Laptop rules | [15 Audit or enforce](#15-week-1-audit-or-enforce) · [16 Protected paths and blocked commands](#16-protected-paths-blocked-commands-blocked-tools) · [17 MCP servers](#17-allowed-mcp-servers-per-persona) · [18 Browser allowlist](#18-browser-allowlist) · [19 Antigravity settings](#19-antigravity-settings-cli-and-desktop) · [20 App Control and Sysmon](#20-app-control-and-sysmon-windows) · [21 Remote Desktop](#21-remote-desktop-windows) |
 | Logging and evidence | [22 Saved queries](#22-saved-queries) · [23 Log retention](#23-log-retention) · [24 Alert e-mail](#24-alert-e-mail) |
-| Region and project | [25 Region or project](#25-region-or-project) |
+| Region, project and network | [25 Region or project](#25-region-or-project) · [26 Own network or Shared VPC](#26-own-network-or-shared-vpc) |
 | — | [Not changeable in the POC](#not-changeable-in-the-poc) |
 
 ---
@@ -55,6 +55,7 @@ A catalogue of the settings you may want to change during the POC, each with the
 - **How:** 1. Change the value. 2. `poc/poc-gateway.sh --yes`. 3. Re-run the install on that laptop with the new kit.
 - **Reaches:** the gateway applies the new persona at once; the install moves the owner to the matching local group (`AGY-Dev` / `AGY-Contractor`, Mac `agy-dev` / `agy-contractor`) and installs that persona's rules. The owner signs out and in once.
 - **Check:** the test shows the owner in the new group (Windows `P03`, Mac `M08`). **Undo:** change it back the same way.
+- **Windows 10 or Windows 11:** the `os` column works the same way (`windows` / `windows10`): change it, run `--yes`, then uninstall and install with the new kit's script ([POC-WINDOWS-10.md](POC-WINDOWS-10.md)).
 
 ### 4. Change a laptop's owner
 - **What:** another person uses the laptop.
@@ -225,6 +226,13 @@ These change files in the repository. After editing: `poc/poc-gateway.sh --yes` 
 
 ### 25. Region or project
 - Not changeable in place. Finish with the old project first (uninstall the laptops, `poc/poc-gateway.sh --destroy`), then run `poc/poc-gateway.sh` again and give the new project or region (answers 1 and 2). New kits for every laptop.
+
+### 26. Own network or Shared VPC
+- **What:** where the gateway's internal IP comes from. **Default:** a new VPC in the POC project.
+- **Where:** question 7 of `poc/poc-gateway.sh` (saved in `poc/.state/answers.env`).
+- **How:** run `poc/poc-gateway.sh` without `--yes`, keep answers 1–6, answer question 7 (`2` = your Shared VPC; details and network team checklist in [POC-SHARED-VPC.md](POC-SHARED-VPC.md)).
+- **Reaches:** cloud (the POC network is removed, the gateway gets an IP in your subnet, about 7 minutes) and kits (rebuilt automatically; certificates stay valid). Re-install laptops that were already installed.
+- **Check:** `poc/poc-gateway.sh --status` shows the network and the new gateway IP. **Undo:** run again and answer question 7 with `1`.
 
 ---
 

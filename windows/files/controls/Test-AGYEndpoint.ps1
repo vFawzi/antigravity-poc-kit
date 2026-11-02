@@ -180,14 +180,45 @@ else { Write-Result "FAIL" "V73" $t73 "missing machine environment: $($miss -joi
 
 # ---------------------------------------------------------------- V74 WDAC base + build-root supplemental active
 $t74 = "WDAC base and build-root supplemental policy active"
+$suppId = "a6a0b11d-0000-4a67-8000-000000000018"
+# the base must allow supplemental policies (rule option 17), otherwise Windows ignores the build-root supplemental
+$baseXmlText = $(try { Get-Content "$Root\agy-wdac.xml" -Raw -ErrorAction Stop } catch { "" })
+$allowSupp = $baseXmlText -match "Enabled:Allow Supplemental Policies"
+if (-not (Get-Command CiTool.exe -ErrorAction SilentlyContinue)) {
+  # Windows 10: no CiTool - policies are staged in the active-policy folder and load at the next reboot; activation is
+  # read from CodeIntegrity event 3099 ("Refreshed and activated Code Integrity policy {GUID}") since the last boot
+  $act = "$env:windir\System32\CodeIntegrity\CiPolicies\Active"
+  $staged = @(Get-ChildItem "C:\ProgramData\Antigravity" -Filter "{*}.cip" -ErrorAction SilentlyContinue | Where-Object { Test-Path (Join-Path $act $_.Name) })
+  $suppCip = @($staged | Where-Object { $_.BaseName -match $suppId })
+  $baseCip = @($staged | Where-Object { $_.BaseName -notmatch $suppId })
+  if (-not $suppCip -or -not $baseCip) { Write-Result "FAIL" "V74" $t74 "staged policies: base $($baseCip.Count), supplemental $($suppCip.Count) in $act" }
+  elseif (-not $allowSupp) { Write-Result "FAIL" "V74" $t74 "base policy lacks 'Enabled:Allow Supplemental Policies' - the supplemental is ignored" }
+  else {
+    $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+    $ev = @(Get-WinEvent -FilterHashtable @{ LogName = "Microsoft-Windows-CodeIntegrity/Operational"; Id = 3099; StartTime = $boot } -ErrorAction SilentlyContinue)
+    $on = @{}
+    foreach ($c in @($baseCip[0], $suppCip[0])) {
+      $g = $c.BaseName.Trim("{}")
+      $on[$c.BaseName] = @($ev | Where-Object { $_.Message -match [regex]::Escape($g) }).Count -gt 0
+    }
+    $newer = @($baseCip[0], $suppCip[0] | Where-Object { $_.LastWriteTime -gt $boot }).Count -gt 0
+    if ($on[$baseCip[0].BaseName] -and $on[$suppCip[0].BaseName] -and -not $newer) {
+      Write-Result "PASS" "V74" $t74 "base $($baseCip[0].BaseName) + supplemental activated at boot (event 3099; no CiTool on this OS)"
+    } else {
+      Write-Result "WARN" "V74" $t74 ("staged in $act (no CiTool on this OS), active after a reboot - activated since boot: base " +
+        "$($on[$baseCip[0].BaseName]), supplemental $($on[$suppCip[0].BaseName])$(if ($newer) { '; policy updated after the last boot' })")
+    }
+  }
+} else {
 try {
   $list = (& CiTool.exe --list-policies -json | ConvertFrom-Json).Policies
   $base = $list | Where-Object { $_.FriendlyName -eq "AGY workstation base" -and $_.IsEnforced }
-  $supp = $list | Where-Object { $_.PolicyID -match "a6a0b11d-0000-4a67-8000-000000000018" -and $_.IsEnforced }
+  $supp = $list | Where-Object { $_.PolicyID -match $suppId -and $_.IsEnforced }
   $mode = $(try { (Get-Content "$Root\agy-wdac.mode" -Raw -ErrorAction Stop).Split("|")[0] } catch { "?" })
-  if ($base -and $supp) { Write-Result "PASS" "V74" $t74 "base active ($mode mode), supplemental active" }
-  else { Write-Result "FAIL" "V74" $t74 "base=$([bool]$base) supplemental=$([bool]$supp) (CiTool --list-policies)" }
+  if ($base -and $supp -and $allowSupp) { Write-Result "PASS" "V74" $t74 "base active ($mode mode, allows supplemental policies), supplemental active" }
+  else { Write-Result "FAIL" "V74" $t74 "base=$([bool]$base) supplemental=$([bool]$supp) allowSupplemental=$allowSupp (CiTool --list-policies)" }
 } catch { Write-Result "FAIL" "V74" $t74 "CiTool failed: $($_.Exception.Message)" }
+}
 
 # ---------------------------------------------------------------- V75 WSL / Docker only for AGY-ContainerDev
 $t75 = "WSL / Docker Desktop blocked for personas outside AGY-ContainerDev"

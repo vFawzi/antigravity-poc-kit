@@ -58,6 +58,20 @@ output "gateway_ilb_ip" {
   value = var.enable_mtls && local.gw_on ? module.mtls[0].ilb_ip : ""
 }
 
+output "network" {
+  description = "Where the gateway front door lives: mode (create = own VPC, shared = Shared VPC subnet), host project, network, subnet, load balancer IP and port, global access, private DNS zone."
+  value = {
+    mode          = var.network_mode
+    host_project  = local.shared_vpc ? var.shared_vpc_host_project : var.project_id
+    network       = basename(coalesce(local.network_id, "-"))
+    subnet        = basename(coalesce(local.subnet_id, "-"))
+    gateway_ip    = var.enable_mtls && local.gw_on ? module.mtls[0].ilb_ip : ""
+    port          = 443
+    global_access = var.ilb_global_access
+    private_dns   = !local.shared_vpc
+  }
+}
+
 output "device_ca_pool" {
   value = var.enable_mtls && local.gw_on ? module.mtls[0].ca_pool : ""
 }
@@ -168,7 +182,7 @@ output "windows_image_pipeline" {
   value = var.enable_windows_image_pipeline ? {
     build_sa = module.image_pipeline[0].build_sa_email, vm_sa = module.image_pipeline[0].vm_sa_email,
     kms_key  = module.security.kms_key, repo = "${var.region}-docker.pkg.dev/${var.project_id}/${local.p}-images",
-    subnet   = basename(module.network.subnet_id)
+    subnet   = basename(local.subnet_id)
     # mandatory labels for the image
     environment = lookup(var.labels, "environment", "unset"), data_classification = lookup(var.labels, "data_classification", "internal")
     cost_center = lookup(var.labels, "cost_center", "unset")

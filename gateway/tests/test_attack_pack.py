@@ -223,3 +223,17 @@ def test_proxy_scenario_refuses_non_loopback_urls() -> None:
     runner = importlib.import_module("runner")
     observed, note = runner.run_proxy_scenario({"deterministic": {"proxy": {"url": "file:///etc/passwd", "expect_http": 403}}})
     assert observed == "error" and "127.0.0.1" in note
+
+
+def test_hidden_file_counts_as_denied(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib
+    import sys as _sys
+    _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "poc" / "attack-pack"))
+    runner = importlib.import_module("runner")
+
+    def deny(self: pathlib.Path, *a: object, **k: object) -> bool:
+        raise PermissionError(5, "Access is denied")
+
+    monkeypatch.setattr(pathlib.Path, "exists", deny)
+    denied, note = runner._check({"type": "not_readable", "path": "C:/ProgramData/Antigravity/credproxy/device.key"})
+    assert denied is True and "not visible" in note

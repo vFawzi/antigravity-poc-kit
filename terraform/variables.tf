@@ -66,6 +66,62 @@ variable "subnet_cidr" {
   default     = "10.40.0.0/24"
 }
 
+variable "network_mode" {
+  description = "create = own VPC, subnets, router, NAT and firewall rules in this project (default). shared = use an existing Shared VPC subnet of a host project for the gateway load balancer IP; nothing is created or changed in the host project."
+  type        = string
+  default     = "create"
+  validation {
+    condition     = contains(["create", "shared"], var.network_mode)
+    error_message = "network_mode must be \"create\" or \"shared\"."
+  }
+}
+
+variable "shared_vpc_host_project" {
+  description = "network_mode = shared: Shared VPC host project ID (owned by your network team)."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.shared_vpc_host_project == "" || can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.shared_vpc_host_project))
+    error_message = "shared_vpc_host_project must be a valid project ID (or empty)."
+  }
+}
+
+variable "shared_vpc_network" {
+  description = "network_mode = shared: name of the Shared VPC network in the host project."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.shared_vpc_network == "" || can(regex("^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$", var.shared_vpc_network))
+    error_message = "shared_vpc_network must be a network name (lowercase letters, digits, hyphens), not a URL."
+  }
+}
+
+variable "shared_vpc_subnet" {
+  description = "network_mode = shared: name of the subnet (in var.region) shared with this project; the gateway load balancer IP comes from it."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.shared_vpc_subnet == "" || can(regex("^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$", var.shared_vpc_subnet))
+    error_message = "shared_vpc_subnet must be a subnet name (lowercase letters, digits, hyphens), not a URL."
+  }
+}
+
+variable "gateway_ilb_ip" {
+  description = "Optional static internal IP for the gateway load balancer (must be free in the subnet). Empty = any free IP."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.gateway_ilb_ip == "" || can(cidrhost("${var.gateway_ilb_ip}/32", 0))
+    error_message = "gateway_ilb_ip must be an IPv4 address (or empty for automatic)."
+  }
+}
+
+variable "ilb_global_access" {
+  description = "Allow clients from other regions (e.g. a VPN or Interconnect that ends in another region) to reach the gateway load balancer."
+  type        = bool
+  default     = false
+}
+
 # ----------------------------------------------------------------------------- workstation
 variable "machine_type" {
   description = "Workstation machine type."

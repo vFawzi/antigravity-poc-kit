@@ -51,6 +51,7 @@ It writes `preflight-report.md` and ends with `READY` or `BLOCKED (<n> blocking)
 | Item | Requirement |
 |---|---|
 | VPN | HA VPN + Cloud Router (BGP) to the POC VPC (created in §3, default subnet `10.40.0.0/24`; the gateway's internal IP comes from this subnet). The internal load balancer is regional and has no global access: terminate the VPN (or interconnect attachment) in the deployment region |
+| Shared VPC | Instead of the new POC network, the gateway can take an IP from a subnet of your existing Shared VPC (question 7); with a connection that ends in another region, answer 7f = yes (global access). See [POC-SHARED-VPC.md](POC-SHARED-VPC.md) |
 | Routes | On-premises learns `10.40.0.0/24`; remote workers' client VPN / ZTNA routes the gateway IP through the tunnel |
 | Firewall | Your corporate firewall allows TCP 443 from the POC laptops to the gateway IP |
 | TLS inspection | None on the path to the gateway (mTLS breaks) |
@@ -83,10 +84,10 @@ mac-dev-01,developer2@example.com,dev,macos
 | Column | Rule (checked by `poc_kit.py validate`) |
 |---|---|
 | Header | Exactly `device,owner,persona,os`; lines starting with `#` are ignored |
-| `device` | Lowercase, `^[a-z0-9][a-z0-9._-]{1,62}$`, unique; becomes the certificate identity |
+| `device` | A free label, unique: `^[a-z0-9][a-z0-9._-]{1,62}$` (2–63 characters). Recommended: the laptop's short host name in lowercase; a full name works up to 63 characters. It becomes the certificate identity (no DNS name in the certificate, no dependency on domain membership) |
 | `owner` | An e-mail address (the identity the gateway logs for this device) |
 | `persona` | `dev` or `contractor` |
-| `os` | `windows` or `macos` (anything else, for example `os 'linux' must be one of windows, macos`, is rejected: Linux endpoints are not part of the POC yet) |
+| `os` | `windows` (Windows 11), `windows10` ([POC-WINDOWS-10.md](POC-WINDOWS-10.md)) or `macos`; anything else (for example `linux`) is rejected: Linux endpoints are not part of the POC yet |
 
 ---
 
@@ -455,7 +456,7 @@ python3 runner.py run --mode deterministic --os macos --persona dev --execute-os
   --hook C:\ProgramData\Antigravity\hooks\agy-hook.py --policy C:\ProgramData\Antigravity\hooks\policy.json --out results\
 ```
 
-Gateway scenarios (A15–A18, A24) need the prompts sent through the agent and the responses imported with `--gateway-results gw.json` (format in the attack-pack `README.md`).
+Scenario A25 (local proxy called by a non-persona user) must be run as a local user who is in neither persona group (`agy-dev` / `agy-contractor`, Windows `AGY-Dev` / `AGY-Contractor`). Gateway scenarios (A15–A18, A24) need the prompts sent through the agent and the responses imported with `--gateway-results gw.json` (format in the attack-pack `README.md`).
 
 **5.4 Switch to enforce.** In Cloud Shell:
 
@@ -555,6 +556,11 @@ install/revoke-installer.sh --project my-poc-project --principal user:installer@
 | `401` `Unmanaged device (fleet_device_unregistered)` | The device isn't in `devices.csv` (or was removed) | Add it and run `poc/poc-gateway.sh --yes` |
 | `503` `AGY policy not applied yet for this user - it applies within a minute of sign-in; try again` | First minute after the first sign-in | Retry after a minute; persistent: Windows check task `AGY-Policy`; macOS `sudo launchctl kickstart -k system/com.google.agy.policy` |
 | `server certificate not ACTIVE after 30 min` (§3) | The gateway's server certificate (Certificate Manager, issued by the server CA pool) isn't ready | `gcloud certificate-manager certificates describe agy-gw-server-srv --location europe-west4 --project my-poc-project`; re-run `poc/poc-gateway.sh --yes` |
+| `network problem (often IPv6 from this machine), not permissions: run from Cloud Shell or switch IPv6 off` (underlying error `cannot assign requested address`) | The admin machine's network (often IPv6) | The installer retries automatically; run from Cloud Shell or switch IPv6 off |
+| `terraform not found (run the install first, or poc/poc-gateway.sh --yes)`, or Terraform can't read its state | Not run from the repository folder, or before the installer's own Terraform (in `.tools/bin`) exists | Run from the repository root; re-run `poc/poc-gateway.sh --yes` |
+| Cloud Storage service agent "does not exist" on a new project | The project's Storage service agent is still being created | Handled automatically: the installer creates it and retries for about 3 minutes, then stops with a clear message; re-running is safe |
+| Certificate Manager / Private CA IAM error 400 right after the APIs were enabled on a new project | The new service agents aren't ready yet | Handled by the automatic retry; if it still stops, re-run `poc/poc-gateway.sh --yes` |
+| Preflight `org policy run.managed.requireInvokerIam` FAIL | The policy is enforced on the project | [Project exception](#organisation-policy-runmanagedrequireinvokeriam) |
 | P05 / M12 WARN or FAIL | Certificate expires within 7 days or has expired | §7 renew |
 | `nobody is signed in at the console` | No owner signed in, no `-User` / `--user` | Let the owner sign in once, or pass the account |
 | `… is a local administrator - POC users must be standard users` | Owner is an administrator | Use the owner's standard account |
@@ -563,13 +569,35 @@ install/revoke-installer.sh --project my-poc-project --principal user:installer@
 | Users stay in PowerShell Constrained Language Mode after removing an older version | That version left AppLocker caches in force | Run `-Uninstall` from a current kit (resets every AppLocker collection when AGY rules are present) |
 | `Device owner: … correct? (y/n)` answered `n` (`cancelled - pass -User <account> to choose the owner`) | Wrong proposed owner | Re-run with `-User <account>` / `--user <short name>` |
 
+### Organisation policy `run.managed.requireInvokerIam`
+
+**Why the preflight fails:** the gateway runs on Cloud Run behind the internal mTLS load balancer with the Cloud Run IAM invoker check turned off. The load balancer can't attach Google identity tokens, so with this policy enforced every laptop request would be refused. The gateway authenticates the laptops itself.
+
+**Fix (a project exception; nothing else changes):** an **Organization Policy Administrator** (`roles/orgpolicy.policyAdmin`) runs:
+
+```bash
+cat > requireInvokerIam.yaml <<'YAML'
+name: projects/my-poc-project/policies/run.managed.requireInvokerIam
+spec:
+  rules:
+  - enforce: false
+YAML
+gcloud org-policies set-policy requireInvokerIam.yaml
+```
+
+Then re-run `poc/poc-gateway.sh --yes`.
+
+**Controls that stay in place:** Cloud Run ingress is internal only; the internal load balancer requires a valid laptop certificate; the gateway only accepts requests carrying the load balancer's secret header; laptops must be in the device registry; no `allUsers` / `allAuthenticatedUsers` access.
+
+**Undo after the POC:** `gcloud org-policies delete run.managed.requireInvokerIam --project my-poc-project`.
+
 ## 11. Known POC limits
 
 | Limit | Impact | Workaround |
 |---|---|---|
 | No certificate-only refresh | Renewing a certificate or switching to enforce means re-running `-Install` / `--install` with the new kit (3–6 minutes) | Plan renewals before P05 / M12 warn (< 7 days); combine with the switch to enforce |
 | Removing a device doesn't delete its files, and its certificate stays valid | The gateway answers `401` at once, but the old kit and certificate stay on the admin machine, and the certificate stays cryptographically valid until it expires (at most 30 days) | Delete `poc-kit/<device>.*` and `poc/.state/certs/<device>.*` by hand |
-| The internal load balancer has no global access | Clients must arrive in the deployment region | Terminate the VPN (or interconnect attachment) in the deployment region |
+| The internal load balancer has no global access in the POC's own network | Clients must arrive in the deployment region | Terminate the VPN (or interconnect attachment) in the deployment region, or use a Shared VPC with question 7f = yes ([POC-SHARED-VPC.md](POC-SHARED-VPC.md)) |
 | Fixed gateway name | `gateway.<internal domain>` (default `gateway.agy.internal`); it can't be set through the questions | Nothing to do: the endpoint scripts pin it in the hosts file |
 | Cloud deploy time varies | About 25–30 minutes on a clean project, about 5 minutes on re-runs | The installer prints the measured minutes at the end |
 | No firewall rule for client ranges | None is expected for an internal Application Load Balancer | Confirm during the first VPN test (P02 / M11 mTLS check) |

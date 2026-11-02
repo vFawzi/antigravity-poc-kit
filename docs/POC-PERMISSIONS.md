@@ -100,7 +100,7 @@ Compute Engine, Cloud Run, Cloud Build, Artifact Registry, Model Armor, Secret M
 | Item | Requirement |
 |---|---|
 | VPN | Site-to-site VPN (or interconnect) to the POC VPC; remote workers need a route through it |
-| Routes and firewalls | Laptops → gateway internal IP (VPC subnet, default `10.40.0.0/24`), TCP 443, allowed by your corporate firewall. The internal load balancer is regional without global access: terminate the VPN in the deployment region |
+| Routes and firewalls | Laptops → gateway internal IP (VPC subnet, default `10.40.0.0/24`), TCP 443, allowed by your corporate firewall. Own POC network: the internal load balancer is regional without global access, so terminate the VPN in the deployment region. Shared VPC: see [POC-SHARED-VPC.md](POC-SHARED-VPC.md) (question 7f for a connection in another region) |
 | DNS | Nothing to configure: `gateway.agy.internal` is in a private zone; the device script pins it in the laptop's hosts file |
 | TLS inspection | None on the gateway path (mTLS) |
 

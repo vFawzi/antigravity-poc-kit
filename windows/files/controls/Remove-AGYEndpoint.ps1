@@ -97,8 +97,13 @@ if ($Scope -eq "core") {
   # 4. WDAC: the AGY base and supplemental policies (their .cip files are named after the policy GUID)
   foreach ($cip in @(Get-ChildItem $Root -Filter "{*}.cip" -ErrorAction SilentlyContinue)) {
     $guid = $cip.BaseName
-    & CiTool.exe --remove-policy $guid -json 2>&1 | Out-Null
-    Note "WDAC policy $guid removed (CiTool exit $LASTEXITCODE)"
+    if (Get-Command CiTool.exe -ErrorAction SilentlyContinue) {
+      & CiTool.exe --remove-policy $guid -json 2>&1 | Out-Null
+      Note "WDAC policy $guid removed (CiTool exit $LASTEXITCODE)"
+    } else {   # Windows 10: no CiTool - the policy was staged in the active-policy folder; unloaded at the next reboot
+      Remove-Item "$env:windir\System32\CodeIntegrity\CiPolicies\Active\$guid.cip" -Force -ErrorAction SilentlyContinue
+      Note "WDAC policy $guid removed from the active-policy folder (unloaded at the next reboot)"
+    }
   }
   # 5. persona profiles: lift the AGY locks (deny entries, SYSTEM-owned read-only settings) and delete managed files
   $cfgPs = Join-Path $PSScriptRoot "AGYConfig.ps1"

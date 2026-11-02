@@ -56,10 +56,20 @@ gcloud kms keys describe "$KEY" --keyring "$RING" --location "$REGION" --project
        --labels environment=poc,data_classification=confidential,cost_center=${COST_CENTER:-security},workload=antigravity-controls-poc
 
 log "granting the Cloud Storage service agent use of the key"
-# --authorize-cmek provisions the Storage service agent if needed (clean projects) and grants it the key
-for i in 1 2 3 4 5; do
+# a new project has no Storage service agent yet: create it first (plain lookup provisions it), then grant the key.
+# The new agent can take a few minutes to become visible to IAM ("service account ... does not exist"): retry ~3 min.
+gcloud storage service-agent --project "$PROJECT" >/dev/null 2>&1 || log "Storage service agent not visible yet - provisioning"
+CMEK_TRIES="${CMEK_TRIES:-18}"; CMEK_SLEEP="${CMEK_SLEEP:-10}"   # 18 x 10 s = 3 min
+[[ "$CMEK_TRIES" =~ ^[1-9][0-9]*$ ]] || CMEK_TRIES=18; [[ "$CMEK_SLEEP" =~ ^[0-9]+$ ]] || CMEK_SLEEP=10
+for i in $(seq 1 "$CMEK_TRIES"); do
   gcloud storage service-agent --project "$PROJECT" --authorize-cmek "$KEY_ID" >/dev/null && break
-  log "service agent not ready yet - retry $i"; sleep 10
+  if [[ $i -eq $CMEK_TRIES ]]; then
+    echo "ERROR: could not grant the Cloud Storage service agent of ${PROJECT} use of ${KEY_ID} after $((CMEK_TRIES * CMEK_SLEEP / 60)) minutes." >&2
+    echo "       The agent (service-<project-number>@gs-project-accounts.iam.gserviceaccount.com) is still propagating or you lack" >&2
+    echo "       cloudkms.cryptoKeys.setIamPolicy on the key. Wait a few minutes and re-run (nothing else was changed)." >&2
+    exit 5
+  fi
+  log "Storage service agent not ready yet (new projects: up to a few minutes) - retry $i/$CMEK_TRIES"; sleep "$CMEK_SLEEP"
 done
 
 log "state bucket gs://${BUCKET} (versioned, UBLA, public access prevention, CMEK, soft delete 7d)"

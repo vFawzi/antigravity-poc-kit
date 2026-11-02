@@ -232,7 +232,11 @@ def _check(c: dict[str, Any]) -> tuple[bool | None, str]:
     t = c["type"]
     if t in ("not_writable", "not_readable"):
         p = pathlib.Path(c["path"])
-        if not p.exists():
+        try:
+            present = p.exists()
+        except PermissionError:   # the folder ACL hides the file from this user (e.g. the device key): denied
+            return True, f"{p}: access denied (not visible to this user)"
+        if not present:
             return None, f"{p}: not found (component installed?)"
         try:
             with open(p, "ab" if t == "not_writable" else "rb") as fh:   # append mode: opens for write, writes nothing

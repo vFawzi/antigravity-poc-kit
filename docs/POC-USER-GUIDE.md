@@ -8,6 +8,7 @@ For developers and contractors in the Antigravity POC. Your IT team installed th
 |---|---|
 | First start | Sign out and in once after IT installed the POC. Start `agy` from a terminal with your normal (standard) account; it doesn't run for administrator accounts or for other people on your laptop |
 | First minute | Right after your first sign-in you may see "AGY policy not applied yet for this user - it applies within a minute of sign-in; try again". Wait a minute and retry |
+| Windows 10 laptops | No terminal sandbox: the agent asks your approval for every command, except allow-listed read-only commands |
 | Approvals | The agent asks before some steps (for example `git commit`, `git push`, `npm publish`). Read the request before you approve. Sessions that skip human review are not allowed |
 | Blocked actions | Some actions are blocked, with the reason in the conversation: for example reading SSH keys, `.env` files or browser passwords, uploads to external hosts, downloaded scripts piped into a shell, deleting your home folder. Destructive commands: run them yourself in your terminal |
 | Models | Developers: Flash and the approved Pro model. Contractors: Flash models only, and no web search, URL reading or browser tools |

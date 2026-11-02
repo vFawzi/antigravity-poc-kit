@@ -122,13 +122,43 @@ def seat_testing(md: str, inspector: str) -> str:
     return md + SEAT_SECTION.replace("{inspector}", inspector or "(not deployed)")
 
 
+def network_summary(net: dict[str, Any]) -> str:
+    """One line for the hand-off: where the gateway IP lives and what the network team needs to allow."""
+    if not net:
+        return "-"
+    ip = net.get("gateway_ip") or "-"
+    where = (f"Shared VPC: host project `{net.get('host_project', '')}`, network `{net.get('network', '')}`, "
+             f"subnet `{net.get('subnet', '')}`" if net.get("mode") == "shared"
+             else f"own VPC in this project (network `{net.get('network', '')}`, subnet `{net.get('subnet', '')}`)")
+    ga = "on (clients in other regions allowed)" if net.get("global_access") else "off (clients in this region only)"
+    dns = ("private DNS zone in this project" if net.get("private_dns")
+           else "no private DNS zone: devices pin the name to the IP (kits do this)")
+    return f"{where}; gateway `{ip}:{net.get('port', 443)}` (TCP 443 only); global access {ga}; {dns}"
+
+
+POC_ONBOARD = """## 2. Onboard a device (POC)
+
+1. Devices come from `devices.csv` (device, owner, persona, os): add, change or remove a row, then run
+   `poc/poc-gateway.sh --yes`. The gateway takes user and group from this registry only; removing the row revokes the device.
+2. Certificates and kits: `poc/poc-gateway.sh` issues the device certificates and writes one kit per device to
+   `poc-kit/<device>.tar.gz` (endpoint script, settings, certificate and key). Hand kits to IT over a secure channel.
+3. Laptops install from their kit: run the endpoint script as admin/root (`-Install`, then `-Test`).
+4. Network: the laptop needs private connectivity (VPN / Interconnect) to the gateway IP on TCP 443; the kit pins the
+   name {mtls_url} to that IP.
+5. Status (gateway IP, network, certificate expiry): `poc/poc-gateway.sh --status`.
+"""
+
+
 def write_gateway_profile(od: pathlib.Path, project: str, region: str, env: dict[str, str],
-                          fleet: dict[str, Any], kit: dict[str, Any]) -> int:
+                          fleet: dict[str, Any], kit: dict[str, Any], poc: bool = False,
+                          net: dict[str, Any] | None = None) -> int:
     devices = fleet.get("devices", [])
     groups = ", ".join(f"`{g}`" for g in kit.get("groups", {}))
-    md = f"""# AGY enterprise gateway - device onboarding hand-off
+    title = "AGY POC gateway - device hand-off" if poc else "AGY enterprise gateway - device onboarding hand-off"
+    by = "`poc/poc-gateway.sh` (POC gateway)" if poc else "`install.sh` (gateway profile)"
+    md = f"""# {title}
 
-Generated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M UTC} by `install.sh` (gateway profile). Non-secret values only; `source testing.env`.
+Generated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M UTC} by {by}. Non-secret values only; `source testing.env`.
 
 ## 1. Environment
 
@@ -136,6 +166,7 @@ Generated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M UTC} by `install.sh` 
 |---|---|
 | Project / region | `{project}` / `{region}` |
 | Device front door (internal mTLS load balancer) | {env['AGY_GATEWAY_MTLS_URL']} (IP {env['AGY_GATEWAY_ILB_IP'] or '-'}) |
+| Network | {network_summary(net or {})} |
 | Gateway (Cloud Run, internal only, never called directly) | {env['AGY_GATEWAY_URL']} |
 | Fleet CA pool | `{fleet.get('ca_pool', '')}` |
 | Device identity (certificate SAN) | `{fleet.get('spiffe_prefix', '')}<device-id>` |
@@ -143,7 +174,7 @@ Generated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M UTC} by `install.sh` 
 | Groups | {groups} |
 | Policy notice mode / blocked-prompt audit trail | `{kit.get('block_mode', '')}` / `{kit.get('prompt_logging', '')}` |
 
-## 2. Onboard a device
+{{onboard}}## 2. Onboard a device
 
 1. Register it: in `terraform/custom.auto.tfvars` add `fleet_devices = {{ "<device-id>" = {{ user = "alice@example.com", group = "agy-dev" }} }}` and run `./install.sh`. The gateway takes user and group from this registry only; remove the entry to revoke the device.
 2. Certificate: the device (or your MDM) creates the key and a CSR with SAN `{fleet.get('spiffe_prefix', '')}<device-id>`; sign it with `make fleet-cert DEVICE=<device-id> CSR=<file>` (or your MDM service account in `fleet_issuers`). Lab only: `make fleet-cert DEVICE=<device-id>` generates the key locally.
@@ -155,8 +186,13 @@ Generated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M UTC} by `install.sh` 
 
 `make logs` (gateway decisions; fleet devices appear with `device.kind=fleet`, `device.device_id`, the registry user/group and the client-reported `os_user`), rejections as `DEVICE_REJECTED` (`fleet_device_unregistered`, `fleet_cert_required`, `mtls_*`), Vertex AI attribution in the Data Access audit log (V91).
 
-`./install.sh --destroy` removes everything.
+{"`poc/poc-gateway.sh --destroy`" if poc else "`./install.sh --destroy`"} removes everything.
 """
+    if poc:   # replace the generic onboarding (custom.auto.tfvars / make fleet-cert / manual proxy) with the POC flow
+        head, rest = md.split("{onboard}## 2. Onboard a device", 1)
+        md = head + POC_ONBOARD.replace("{mtls_url}", (env["AGY_GATEWAY_MTLS_URL"] or "-").removeprefix("https://")) + "\n## 3." + rest.split("\n## 3.", 1)[1]
+    else:
+        md = md.replace("{onboard}", "")
     (od / "TESTING.md").write_text(md)
     print(f"hand-off written: {od / 'TESTING.md'}  {od / 'testing.env'}")
     return 0
@@ -183,6 +219,7 @@ def main() -> int:
         "AGY_GATEWAY_ILB_IP": out(tf, "gateway_ilb_ip"), "AGY_DEVICE_CA_POOL": out(tf, "device_ca_pool"),
         "AGY_MODEL_ARMOR_TEMPLATE": out(tf, "model_armor_template"), "AGY_LOG_BUCKET": log_bucket,
         "AGY_BQ_DATASET": bq, "AGY_PERSONAS": ",".join(sorted(secrets)) or "dev,contractor",
+        "AGY_NETWORK_MODE": (out(tf, "network", None) or {}).get("mode", "create"),
         **{f"AGY_DESKTOP_SECRET_{u.upper()}": s for u, s in secrets.items()},
     }
     fleet: dict[str, Any] = out(tf, "fleet", None) or {}
@@ -193,8 +230,10 @@ def main() -> int:
         "# AGY test hand-off - non-secret values (source testing.env). Generated by install.sh.\n"
         + "".join(f"export {k}={shlex.quote(str(v))}\n" for k, v in env.items()))
 
+    net: dict[str, Any] = out(tf, "network", None) or {}
+    poc = bool(os.environ.get("AGY_POC"))   # set in poc/.state/install.conf by poc/poc-gateway.sh
     if not vm:   # gateway profile: no reference workstation - hand-off is about onboarding fleet devices
-        return write_gateway_profile(od, project, region, env, fleet, kit)
+        return write_gateway_profile(od, project, region, env, fleet, kit, poc, net)
 
     groups = kit.get("groups", {})
     group_rows = "\n".join(

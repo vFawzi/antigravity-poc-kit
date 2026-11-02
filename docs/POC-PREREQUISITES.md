@@ -17,6 +17,7 @@ Checklist for the pay-as-you-go POC: Antigravity through the customer-run gatewa
 | A4 | **Billing Account Costs Manager** on the billing account for the installer, granted by a billing account administrator (mandatory: budgets can't be in a project custom role), to create budgets for one budget per persona, for example developers 2,000 and contractors 1,000 in the billing account currency, alerts at 50 / 90 / 100 % | Billing admin | Yes for cost per persona | K | Budgets visible in Billing |
 | A5 | **Detailed billing export to BigQuery** enabled, for the invoiced cost per persona (the gateway view `v_persona_usage` gives an estimate without it). Data appears with a delay of hours to a day | Billing admin | No (estimate available) | K (≥ 2 days before go-live) | Export dataset has rows |
 | A6 | Organisation policies reviewed for conflicts: resource locations (must allow `europe-west4` / `eu`), CMEK requirement, restricted services (`gcp.restrictServiceUsage`), Cloud Run ingress, domain-restricted sharing, service-account key creation (not needed) | Cloud admin + POC team | Yes if conflicting | K | Preflight organisation-policy check |
+| A6b | Organisation policy `run.managed.requireInvokerIam` not enforced on the POC project, **or** a project exception set by an Organization Policy Administrator (the gateway runs behind the internal load balancer without the Cloud Run invoker check; see [the exception](POC-TECHNICAL-REFERENCE.md#organisation-policy-runmanagedrequireinvokeriam)) | Org admin | Yes | K | Preflight `org policy run.managed.requireInvokerIam` = PASS |
 | A7 | These APIs may be enabled: Vertex AI, Model Armor, Sensitive Data Protection, Private CA, Certificate Manager, Network Security, Cloud DNS, Cloud Run, Artifact Registry, Cloud Build, KMS, Secret Manager, Logging, Monitoring, BigQuery. No Cloud Armor: the POC gateway is reached only through an internal load balancer | Cloud admin | Yes | K | The installer enables them; check for errors |
 | A8 | The selected Gemini models are available in the EU region with quota for the POC users (Flash for contractors, the approved Pro model for developers) | Cloud admin + POC team | Yes | K | Live test call per model through the gateway |
 | A9 | Model Armor and Sensitive Data Protection available in the chosen EU location; template policy agreed (prompt injection, jailbreak, secrets / personal data thresholds) | Security | No (defaults exist) | K | Model Armor template present |
@@ -25,12 +26,24 @@ Checklist for the pay-as-you-go POC: Antigravity through the customer-run gatewa
 
 ## B. Network, VPN and DNS
 
+**Network requirements at a glance**
+
+| Need | Detail |
+|---|---|
+| Laptops → gateway | Only TCP 443 to the gateway IP, over your VPN or Interconnect |
+| TLS inspection | None on that path |
+| DNS | Not needed (the install pins the gateway name in the hosts file) |
+| Internet during the install | Windows: `www.python.org`, `storage.googleapis.com` (plus `download.sysinternals.com` only with `-Sysmon`; optional `github.com` for Windows Terminal: if blocked, the install continues with a warning). Mac: `storage.googleapis.com` and the Google-hosted Antigravity CLI release manifest |
+| Gateway IP and port for the network team | `poc/poc-gateway.sh --status` |
+| Existing Shared VPC instead of a new network | [POC-SHARED-VPC.md](POC-SHARED-VPC.md) |
+
+
 | # | Item | Owner | Blocker | Needed by | Verify |
 |---|---|---|---|---|---|
 | B1 | Site-to-site VPN (HA VPN + Cloud Router / BGP) between the office and the POC project VPC | Network | Yes | D | Tunnel `ESTABLISHED`, BGP up |
 | B2 | Routes: on-premises learns the gateway subnet (internal load balancer IP); Google Cloud learns the on-premises client ranges | Network | Yes | D | `Test-NetConnection <gateway-ip> -Port 443` from a laptop |
 | B3 | **Remote workers:** laptops outside the office need a route into that network (client VPN / SSE / ZTNA) that sends the gateway IP through the tunnel (a split tunnel must include it) | Network | Yes, if users work from home | D | Same test from home |
-| B4 | Firewalls: the corporate firewall allows TCP 443 from the POC laptops to the gateway IP. The gateway's internal load balancer is regional without global access: terminate the VPN in the deployment region | Network | Yes | D | Connection test |
+| B4 | Firewalls: the corporate firewall allows TCP 443 from the POC laptops to the gateway IP (only). No Google Cloud firewall rule is needed. Own POC network: terminate the VPN in the deployment region. Shared VPC whose connection ends in another region: global dynamic routing and answer 7f = yes ([POC-SHARED-VPC.md](POC-SHARED-VPC.md)) | Network | Yes | D | Connection test |
 | B5 | **DNS:** nothing to configure. The gateway name is `gateway.agy.internal` in a private Cloud DNS zone (visible only inside the VPC); the device script pins it to the gateway IP in the laptop's hosts file | Endpoint team | No | D | P01 / M07 `PASS` |
 | B6 | **No TLS inspection** on the path to the gateway (mTLS breaks when a proxy intercepts it). Add a bypass for the gateway host name / IP in proxy, PAC and SSE | Network / Security | Yes | D | mTLS handshake succeeds (P02 / M11 `PASS`) |
 | B7 | Local proxy settings: loopback (`127.0.0.1`, `localhost`) excluded from the system proxy / PAC | Endpoint team | Yes | D | Self-test passes |
@@ -41,7 +54,7 @@ Checklist for the pay-as-you-go POC: Antigravity through the customer-run gatewa
 
 | # | Item | Owner | Blocker | Needed by | Verify |
 |---|---|---|---|---|---|
-| C1 | **Windows 11 24H2 (build 26100) or later** (tested on build 26300). Needed for the agent terminal sandbox; the script refuses older builds. Windows Server works only as a lab simulation without the sandbox (every agent command needs approval) | Endpoint team | Yes | D | `winver`; registry `CurrentBuild` ≥ 26100 |
+| C1 | **Windows 11 24H2 (build 26100) or later** (tested on build 26300); Windows 10 21H2 / LTSC 2021 or 22H2 only as a short-term mitigation ([POC-WINDOWS-10.md](POC-WINDOWS-10.md)). Needed for the agent terminal sandbox; the script refuses older builds. Windows Server works only as a lab simulation without the sandbox (every agent command needs approval) | Endpoint team | Yes | D | `winver`; registry `CurrentBuild` ≥ 26100 |
 | C2 | Edition Enterprise or Education (Pro works for the must-haves; the optional AppLocker / WDAC layer needs Enterprise or Education) | Endpoint team | No | D | `Get-ComputerInfo WindowsProductName` |
 | C3 | x64 hardware, ≥ 8 GB RAM, ≥ 10 GB free disk | Endpoint team | Yes | D | — |
 | C4 | Users are **standard users** (not in local Administrators); IT has a local / LAPS administrator to run the script | Endpoint team | Yes | D | `net localgroup administrators` |
@@ -70,7 +83,7 @@ Checklist for the pay-as-you-go POC: Antigravity through the customer-run gatewa
 
 | # | Item | Owner | Blocker | Needed by | Verify |
 |---|---|---|---|---|---|
-| E1 | `devices.csv`: device name (lowercase, `a-z0-9._-`), owner, persona (`dev` / `contractor`), OS (`windows` / `macos`) for every POC laptop. Suggested mix: about 3 developers, 2 contractors (at least 1 contractor per OS) | POC owner | Yes | K | File validated by `poc-gateway.sh` |
+| E1 | `devices.csv`: device name (a free label, 2–63 characters `a-z0-9._-`; the laptop's short host name in lowercase is recommended), owner, persona (`dev` / `contractor`), OS (`windows` / `windows10` / `macos`) for every POC laptop. Suggested mix: about 3 developers, 2 contractors (at least 1 contractor per OS) | POC owner | Yes | K | File validated by `poc-gateway.sh` |
 | E2 | **Works council / privacy:** POC users are informed that prompts are inspected and that model calls, blocked actions and token usage are logged per device and persona; DPIA screening done; works council consulted where required (employee monitoring) | DPO / HR | Yes (employee monitoring rules) | K | Signed note |
 | E3 | Contractors: the contract allows AI tool use and logging; data classification of the code they may use | Legal / procurement | Yes | K | Confirmation |
 | E4 | Log retention and access for POC data agreed (default: EU location, CMEK, 30 days, read access only for the POC team) | Security | No (defaults) | K | Settings in the report |

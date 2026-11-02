@@ -67,7 +67,7 @@ function Read-Kit {
   if (-not (Test-Path $f)) { Fail "poc.json not found in $Kit" }
   $c = Get-Content $f -Raw | ConvertFrom-Json
   if ($c.schema -ne "agy-poc-kit/1") { Fail "poc.json: unsupported schema '$($c.schema)'" }
-  if ($c.os -ne "windows") { Fail "this kit is for $($c.os), not Windows" }
+  if ($c.os -ne "windows") { Fail $(if ($c.os -eq "windows10") { "this kit is for Windows 10 - use install-windows10.ps1" } else { "this kit is for $($c.os), not Windows" }) }
   if ($c.persona -notin $PersonaGroups.Keys) { Fail "poc.json: unknown persona '$($c.persona)'" }
   $c
 }

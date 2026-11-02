@@ -58,7 +58,7 @@ done
 unset PROJECT_ID REGION ZONE OPERATORS SECOPS_EMAIL INTERNAL_DNS_DOMAIN ENABLE_MTLS DESKTOP_ACCESS \
       RDP_CLIPBOARD INSTALL_DESKTOP_APP APPARMOR_MODE COST_CENTER PROMPT_LOGGING EVIDENCE_RETENTION_DAYS LOG_LOCK_DAYS \
       INVESTIGATORS INVESTIGATION_APPROVERS COST_ACK DESTROY_ACK PROFILE FLEET FLEET_ISSUERS \
-      CLIENT_MODE SEAT_PROJECT SEAT_LOCATION SEAT_USERS GROUPS_MODE CI_CUSTOMER_ID GROUPS_DOMAIN DEV_GROUP CONTRACTOR_GROUP SEAT_CONTAINMENT SEAT_VPC_SC SEAT_CORP_IPS ORG_ID
+      CLIENT_MODE SEAT_PROJECT SEAT_LOCATION SEAT_USERS GROUPS_MODE CI_CUSTOMER_ID GROUPS_DOMAIN DEV_GROUP CONTRACTOR_GROUP SEAT_CONTAINMENT SEAT_VPC_SC SEAT_CORP_IPS ORG_ID AGY_POC
 [[ -f "$CONF" ]] && source "$CONF"
 [[ -n "$PROFILE_ARG" ]] && PROFILE="$PROFILE_ARG"
 ACCOUNT="$(gcloud config get-value account 2>/dev/null || true)"
@@ -235,6 +235,7 @@ SEAT_VPC_SC="${SEAT_VPC_SC:-n}"
 SEAT_CORP_IPS="${SEAT_CORP_IPS:-}"
 COST_ACK="${COST_ACK:-}"
 EOF
+  [[ -n "${AGY_POC:-}" ]] && echo "AGY_POC=\"$AGY_POC\"" >> "$CONF"   # written by poc/poc-gateway.sh (POC hand-off text)
   log "answers saved to ${CONF#$ROOT/}"
 }
 
@@ -390,12 +391,26 @@ ensure_terraform() {
   log "  $(terraform version | head -1) ready"
 }
 
+tfvar_value() {   # tfvar_value NAME -> effective string/bool value (terraform.tfvars, then *.auto.tfvars in order; last wins)
+  local f v=""
+  for f in "$TF_DIR/terraform.tfvars" "$TF_DIR"/*.auto.tfvars; do
+    [[ -f "$f" ]] || continue
+    local x; x="$(sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\"\{0,1\}\([^\"#]*\)\"\{0,1\}.*/\1/p" "$f" | tail -1)"
+    [[ -n "$x" ]] && v="${x%"${x##*[![:space:]]}"}"
+  done
+  printf '%s' "$v"
+}
+
 run_preflight() {
   local args=(--project "$PROJECT_ID" --region "$REGION" --zone "$ZONE" --report "$ROOT/preflight-report.md")
   [[ "$ENABLE_MTLS" == "y" ]] && args+=(--mtls)
   [[ "${PROMPT_LOGGING:-hash}" =~ ^(none|hash)$ ]] && args+=(--no-evidence)   # = grant-installer.sh --no-evidence
   local inf; inf="$(sed -n 's/^inference_project *= *"\([a-z0-9-]*\)".*/\1/p' "$TF_DIR"/*.tfvars 2>/dev/null | tail -1)"
   [[ -n "$inf" ]] && args+=(--inference-project "$inf")
+  if [[ "$(tfvar_value network_mode)" == "shared" ]]; then   # Shared VPC: subnet use, proxy-only subnet, org policies
+    args+=(--network-mode shared --shared-vpc-host-project "$(tfvar_value shared_vpc_host_project)"
+           --shared-vpc-network "$(tfvar_value shared_vpc_network)" --shared-vpc-subnet "$(tfvar_value shared_vpc_subnet)")
+  fi
   if [[ "${CLIENT_MODE:-gateway}" =~ ^(seat|mixed)$ ]]; then
     args+=(--seat-project "${SEAT_PROJECT:-$PROJECT_ID}" --seat-location "${SEAT_LOCATION:-eu}")
     [[ "${SEAT_VPC_SC:-n}" == "y" ]] && args+=(--seat-vpc-sc --org-id "${ORG_ID:-}")
@@ -419,12 +434,32 @@ phase_done() { [[ -f "$STATE_DIR/$1" && "$(cat "$STATE_DIR/$1")" == "$(config_ha
 mark()       { config_hash > "$STATE_DIR/$1"; }
 banner()     { printf '\n\033[1;35m==== [%s] %s\033[0m\n' "$1" "$2"; }
 
+NET_HINT_SHOWN=0
+net_error() {   # net_error <log> -> 0 when the failure is a network problem (not permissions / propagation)
+  grep -Eiq 'cannot assign requested address|connection reset|i/o timeout|no route to host' "$1" 2>/dev/null
+}
+
 retry() {   # retry <attempts> <sleep> cmd... - absorbs IAM / API-enablement propagation on clean projects
-  local n="$1" s="$2" i; shift 2
+  local n="$1" s="$2" i rc log; shift 2
+  log="$(mktemp)"
   for ((i = 1; i <= n; i++)); do
-    "$@" && return 0
-    [[ $i -lt $n ]] && { warn "attempt $i/$n failed - retrying in ${s}s (propagation)"; sleep "$s"; }
+    # stdout passes through untouched; stderr is shown and kept to classify the failure (exit code of the command itself)
+    rc=0
+    if { "$@" 2>&1 1>&3 3>&- | tee "$log" >&2; rc=${PIPESTATUS[0]}; } 3>&1; then :; fi
+    [[ $rc -eq 0 ]] && { rm -f "$log"; return 0; }
+    [[ $i -lt $n ]] || break
+    if net_error "$log"; then
+      if [[ $NET_HINT_SHOWN -eq 0 ]]; then
+        warn "network problem (often IPv6 from this machine), not permissions: run from Cloud Shell or switch IPv6 off"
+        NET_HINT_SHOWN=1
+      fi
+      local ns=$(( s * 2 < 60 ? 60 : s * 2 ))
+      warn "attempt $i/$n failed (network) - retrying in ${ns}s"; sleep "$ns"
+    else
+      warn "attempt $i/$n failed - retrying in ${s}s (propagation)"; sleep "$s"
+    fi
   done
+  rm -f "$log"
   return 1
 }
 
@@ -741,9 +776,10 @@ PY
 }
 
 logging_network_checks() {   # audit-log storage, log-bucket lock and VPC egress (RESULT lines)
-  PROJECT_ID="$PROJECT_ID" REGION="$REGION" LOCK="${LOG_LOCK_DAYS:-0}" python3 - <<'PY'
+  PROJECT_ID="$PROJECT_ID" REGION="$REGION" LOCK="${LOG_LOCK_DAYS:-0}" NETWORK_MODE="$(tfvar_value network_mode)" python3 - <<'PY'
 import json, os, subprocess
 p, region, lock = os.environ["PROJECT_ID"], os.environ["REGION"], int(os.environ["LOCK"] or 0)
+shared_vpc = os.environ.get("NETWORK_MODE") == "shared"
 def res(st, i, d, x=""): print(f"RESULT|{st}|{i}|{d}|{x}")
 def g(*a):
     r = subprocess.run(["gcloud", *a, "--project", p, "--format=json"], capture_output=True, text=True)
@@ -763,10 +799,13 @@ if lock:
     res("FAIL" if bad else "PASS", "V95", f"Log buckets locked ({lock} days, irreversible)", ", ".join(bad) or f"{len(sec)} buckets locked")
 else:
     res("WARN", "V95", "Log buckets locked", "not locked (LOG_LOCK_DAYS=0): owners / logging admins can delete logs or shorten retention")
-fw = g("compute", "firewall-rules", "list") or []
-deny = [r for r in fw if r.get("direction") == "EGRESS" and r.get("denied") and "0.0.0.0/0" in r.get("destinationRanges", [])]
-res("PASS" if deny else "WARN", "V96", "VPC egress deny by default (only web, Google APIs and Windows activation leave the VPC)",
-    ", ".join(r["name"] for r in deny) or "no egress deny rule (vpc_egress_restricted = false)")
+if shared_vpc:   # no VPC of our own: egress and firewall rules belong to the network team's Shared VPC
+    res("SKIP", "V96", "VPC egress deny by default", "network_mode = shared: this project has no VPC of its own; firewall and egress rules are managed by your network team in the Shared VPC host project")
+else:
+    fw = g("compute", "firewall-rules", "list") or []
+    deny = [r for r in fw if r.get("direction") == "EGRESS" and r.get("denied") and "0.0.0.0/0" in r.get("destinationRanges", [])]
+    res("PASS" if deny else "WARN", "V96", "VPC egress deny by default (only web, Google APIs and Windows activation leave the VPC)",
+        ", ".join(r["name"] for r in deny) or "no egress deny rule (vpc_egress_restricted = false)")
 PY
 }
 
@@ -923,6 +962,7 @@ p7_validate() {
     awk -F'|' '{icon=($2=="PASS"?"✅":($2=="FAIL"?"❌":($2=="SKIP"?"⏭️":"⚠️"))); printf "| %s %s | %s | %s | %s |\n", icon, $2, $3, $4, $5}' <<<"$out"
     echo; echo "**Result: $([[ $fails -eq 0 ]] && echo PASSED || echo "FAILED ($fails)")** - $warns warning(s)"
     if [[ -n "$VM" ]]; then echo; echo "Persona desktop: \`make desktop PERSONA=dev\` (or contractor) from a machine with an RDP client."
+    elif [[ -n "${AGY_POC:-}" ]]; then echo; echo "POC: devices come from \`devices.csv\`; certificates and device kits from \`poc/poc-gateway.sh\`; each laptop installs from its kit."
     else echo; echo "Gateway profile: register devices in \`fleet_devices\`, issue certificates with \`make fleet-cert DEVICE=<id>\`, then run \`scripts/fleet-probe.sh\` from a connected device."; fi
   } > "$rep"
   awk -F'|' '{c=($2=="PASS"?"32":($2=="FAIL"?"31":($2=="SKIP"?"36":"33"))); printf "\033[1;%sm[%s]\033[0m %s %s %s\n", c, $2, $3, $4, ($5==""?"":"- "$5)}' <<<"$out"
@@ -934,7 +974,8 @@ p8_handoff() {
   banner 8 "test hand-off -> TESTING.md + testing.env"
   local j; j="$(mktemp)"
   tf output -json > "$j" 2>/dev/null || { warn "terraform output unavailable - hand-off skipped"; rm -f "$j"; return 0; }
-  PROJECT_ID="$PROJECT_ID" REGION="$REGION" ZONE="$ZONE" python3 "$ROOT/install/handoff.py" --tf-json "$j" --outdir "$ROOT"
+  PROJECT_ID="$PROJECT_ID" REGION="$REGION" ZONE="$ZONE" AGY_POC="${AGY_POC:-}" \
+    python3 "$ROOT/install/handoff.py" --tf-json "$j" --outdir "$ROOT"
   rm -f "$j"; chmod 644 "$ROOT/TESTING.md" "$ROOT/testing.env"
 }
 
@@ -1035,7 +1076,13 @@ cat <<MSG
 =====================================================================
  AGY POC installed in ${PROJECT_ID} ($(( ($(date +%s) - START) / 60 )) min) - validation: $([[ $RC -eq 0 ]] && echo PASSED || echo "FAILED (see install-report.md)")
    Test hand-off      : TESTING.md (what to test, how to connect, where evidence lands) + testing.env
-$( if [[ "$PROFILE" == "gateway" ]]; then
+$( if [[ -n "${AGY_POC:-}" ]]; then
+cat <<P
+   Profile            : POC gateway (certificate-only devices)
+   Devices            : devices.csv -> poc/poc-gateway.sh issues certificates and writes one kit per device
+   Laptops            : install from the device kit (endpoint script -Install, then -Test)
+P
+elif [[ "$PROFILE" == "gateway" ]]; then
 cat <<G
    Profile            : gateway only (certificate-only devices)
    Register a device  : fleet_devices in terraform/custom.auto.tfvars, then ./install.sh

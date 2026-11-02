@@ -29,6 +29,16 @@ param([ValidateSet("Audit", "Enforce")][string]$WdacMode = "Audit", [string]$Wor
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "AGYConfig.ps1")   # persona SIDs: local groups and / or directory (Entra / AD) group SIDs
 function Audit([string]$m, [string]$type = "Information") { Write-EventLog -LogName Application -Source "agy-mdm" -EventId 1002 -EntryType $type -Message $m }
+# CiTool.exe ships with Windows 11 22H2 and later. Without it (Windows 10) the multiple-policy-format .cip is staged in
+# the CodeIntegrity active-policy folder instead; Windows loads it at the next reboot.
+$HasCiTool = [bool](Get-Command CiTool.exe -ErrorAction SilentlyContinue)
+function Install-AgyCiPolicy([string]$cip, [string]$label) {
+  if ($HasCiTool) { & CiTool.exe --update-policy $cip -json | Out-Null; return }
+  $active = "$env:windir\System32\CodeIntegrity\CiPolicies\Active"
+  New-Item -ItemType Directory -Force -Path $active | Out-Null
+  Copy-Item $cip (Join-Path $active (Split-Path $cip -Leaf)) -Force
+  Audit "WDAC_PENDING_REBOOT: $label staged in $active (no CiTool on this OS) - active after the next reboot" "Warning"
+}
 
 # AGY-NoContainers = (AGY-Dev + AGY-Contractor) minus AGY-ContainerDev: AppLocker has no per-user exceptions and
 # deny wins over allow, so the WSL / Docker deny targets this derived group (kept in sync every drift run)
@@ -226,11 +236,12 @@ if (-not (Test-Path $marker) -or (Get-Content $marker -Raw).Trim() -ne $want) {
   Set-CIPolicyIdInfo -FilePath $wdacXml -PolicyName "AGY workstation base" -PolicyId "AGY-$((Get-Date).ToString('yyyyMMdd'))" | Out-Null
   Set-RuleOption -FilePath $wdacXml -Option 0           # user-mode code integrity
   Set-RuleOption -FilePath $wdacXml -Option 16          # update policy without reboot
+  Set-RuleOption -FilePath $wdacXml -Option 17          # allow supplemental policies (else the build-root supplemental is ignored)
   if ($WdacMode -eq "Audit") { Set-RuleOption -FilePath $wdacXml -Option 3 } else { Set-RuleOption -FilePath $wdacXml -Option 3 -Delete }
   $guid = ([xml](Get-Content $wdacXml)).SiPolicy.PolicyID
   $cip = "C:\ProgramData\Antigravity\$guid.cip"
   ConvertFrom-CIPolicy -XmlFilePath $wdacXml -BinaryFilePath $cip | Out-Null
-  & CiTool.exe --update-policy $cip -json | Out-Null
+  Install-AgyCiPolicy $cip "WDAC base policy"
   $want | Set-Content $marker -Encoding ascii
   Audit "WDAC base policy $guid applied in $WdacMode mode"
 }
@@ -258,7 +269,7 @@ if (-not (Test-Path $suppMarker) -or (Get-Content $suppMarker -Raw).Trim() -ne $
   $sx.Save($supp)
   $scip = "C:\ProgramData\Antigravity\$suppGuid.cip"
   ConvertFrom-CIPolicy -XmlFilePath $supp -BinaryFilePath $scip | Out-Null
-  & CiTool.exe --update-policy $scip -json | Out-Null
+  Install-AgyCiPolicy $scip "WDAC supplemental policy"
   $suppWant | Set-Content $suppMarker -Encoding ascii
   Audit "WDAC supplemental $suppGuid (build roots $BuildRoot, $CacheRoot) applied to base $baseGuid"
 }

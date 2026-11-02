@@ -45,7 +45,7 @@ def test_example_csv_is_valid() -> None:
 
 
 @pytest.mark.parametrize("body,needle", [
-    ("Bad Name,a@example.com,dev,windows\n", "must match"),
+    ("Bad Name,a@example.com,dev,windows\n", "must be lowercase letters, digits"),
     ("win-01,not-an-email,dev,windows\n", "not an e-mail"),
     ("win-01,a@example.com,admin,windows\n", "persona 'admin'"),
     ("win-01,a@example.com,dev,android\n", "os 'android'"),
@@ -242,7 +242,7 @@ def test_kits_carry_the_attack_pack_without_results(tmp_path: Path) -> None:
 
 def test_linux_devices_are_rejected_until_a_linux_endpoint_script_exists(tmp_path: Path) -> None:
     csvp = write_csv(tmp_path, "lin-01,a@example.com,dev,linux\n")
-    with pytest.raises(poc_kit.KitError, match="os 'linux' must be one of windows, macos"):
+    with pytest.raises(poc_kit.KitError, match="os 'linux' must be one of windows, windows10, macos"):
         poc_kit.read_devices(csvp)
 
 

@@ -17,6 +17,7 @@
 
 Checks: tools, auth (gcloud + ADC), project, permissions, billing, org-policy constraints, region, quotas.
 Usage: install/preflight.py --project P --region R --zone Z [--mtls] [--report preflight-report.md]
+       [--network-mode shared --shared-vpc-host-project H --shared-vpc-network N --shared-vpc-subnet S]
 Exit code: 0 = no blocking failures, 1 = blocking failures, 2 = internal error.
 """
 from __future__ import annotations
@@ -32,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import check_permissions as cp  # noqa: E402
@@ -342,6 +344,202 @@ def check_org_policies(project: str, region: str, mtls: bool, token: str) -> Non
             add(f"org policy {c}", "PASS", f"{state} - {why}")
 
 
+ORGPOLICY = "https://orgpolicy.googleapis.com/v2"
+COMPUTE = "https://compute.googleapis.com/compute/v1"
+INVOKER_CONSTRAINT = "run.managed.requireInvokerIam"
+NOTES: list[str] = []   # multi-line guidance appended to the report (after the table)
+
+
+def invoker_iam_guidance(project: str) -> str:
+    """What to do when run.managed.requireInvokerIam is enforced (customer-facing, no internal ids)."""
+    return f"""### Organisation policy `{INVOKER_CONSTRAINT}` blocks the gateway
+
+**Why:** the gateway runs on Cloud Run behind the internal mTLS load balancer with the Cloud Run IAM invoker check
+turned off. The load balancer cannot attach Google identity tokens, so with this policy enforced every device request
+would be refused. Devices are authenticated by the gateway itself instead.
+
+**Fix (project exception, nothing else changes):** an **Organization Policy Administrator**
+(`roles/orgpolicy.policyAdmin`) runs:
+
+```bash
+cat > requireInvokerIam.yaml <<'EOF'
+name: projects/{project}/policies/{INVOKER_CONSTRAINT}
+spec:
+  rules:
+  - enforce: false
+EOF
+gcloud org-policies set-policy requireInvokerIam.yaml
+```
+
+**Compensating controls that stay in place:** Cloud Run ingress is internal only (not reachable from the internet);
+the internal load balancer requires a valid device certificate (mTLS, invalid certificates rejected); the gateway
+only accepts requests that carry the load balancer's secret header; devices must be in the device registry; no
+`allUsers` / `allAuthenticatedUsers` access is granted.
+
+Re-run the installer after the exception is in place."""
+
+
+def policy_enforced(pol: dict) -> bool:
+    """orgpolicy v2 (effective) policy of a boolean / managed constraint -> enforced?"""
+    rules = pol.get("spec", {}).get("rules", [])
+    return any(r.get("enforce") is True and not r.get("condition") for r in rules)
+
+
+def check_invoker_iam(project: str, token: str) -> None:
+    """run.managed.requireInvokerIam (managed constraint, v2 API only) must not be enforced on the project."""
+    url = f"{ORGPOLICY}/projects/{project}/policies/{INVOKER_CONSTRAINT}:getEffectivePolicy"
+    pol: dict | None = None
+    err = 0
+    for up in (None, project):   # without / with a quota project (the Org Policy API may not be enabled in the project)
+        try:
+            pol = get_json(url, token, up)
+            break
+        except urllib.error.HTTPError as e:
+            err = e.code
+            if e.code == 404:   # no policy anywhere in the hierarchy = not enforced
+                pol = {}
+                break
+    if pol is None:
+        add(f"org policy {INVOKER_CONSTRAINT}", "WARN",
+            f"cannot read the effective policy ({err}) - check: gcloud org-policies describe {INVOKER_CONSTRAINT} "
+            f"--effective --project {project} (enforced = the gateway is refused; see the installation guide)")
+        return
+    if policy_enforced(pol):
+        add(f"org policy {INVOKER_CONSTRAINT}", "FAIL",
+            "enforced - the gateway behind the internal load balancer would refuse every device request; an Organization "
+            "Policy Administrator must add a project exception (exact command and compensating controls: see the "
+            "section below this table)")
+        NOTES.append(invoker_iam_guidance(project))
+        print(invoker_iam_guidance(project))
+    else:
+        add(f"org policy {INVOKER_CONSTRAINT}", "PASS", "not enforced on this project (the gateway can run behind the load balancer)")
+
+
+def _matches(values: list[str], *refs: str) -> bool:
+    """Org-policy list values ("projects/x", "under:projects/x", full subnet paths) naming one of refs."""
+    norm = [v.removeprefix("under:").removeprefix("is:") for v in values]
+    return any(n == r or n.endswith("/" + r) or r.startswith(n + "/") for n in norm for r in refs)
+
+
+NETWORK_TEAM = ("ask your network team: share the subnet with this project and grant the installer "
+                "Compute Network User (roles/compute.networkUser) on that one subnet")
+
+
+def usable_subnet_paths(host: str, token: str) -> set[str]:
+    """projects/<p>/regions/<r>/subnetworks/<s> of every subnet the caller may use, from listUsable on the host project."""
+    paths: set[str] = set()
+    page = ""
+    for _ in range(50):   # bounded pagination
+        q = "?maxResults=500" + (f"&pageToken={urllib.parse.quote(page, safe='')}" if page else "")
+        r = get_json(f"{COMPUTE}/projects/{host}/aggregated/subnetworks/listUsable{q}", token)
+        for it in r.get("items", []):
+            m = re.search(r"projects/[^/]+/regions/[^/]+/subnetworks/[^/]+$", str(it.get("subnetwork", "")))
+            if m:
+                paths.add(m.group(0))
+        page = r.get("nextPageToken", "")
+        if not page:
+            break
+    return paths
+
+
+def check_shared_vpc(project: str, region: str, host: str, network: str, subnet: str, token: str) -> None:
+    """network_mode = shared: the installer can use the shared subnet, it is in the right network and region, the host
+    network has an active proxy-only subnet in the region, and the org policies allow it. Read-only, host untouched."""
+    if not (host and network and subnet):
+        add("shared VPC settings", "FAIL", "network mode shared needs host project, network and subnet")
+        return
+    if host == project:
+        add("shared VPC settings", "FAIL", f"host project {host} is this project - name the Shared VPC host project")
+        return
+    sub_path = f"projects/{host}/regions/{region}/subnetworks/{subnet}"
+    add("shared VPC settings", "INFO", f"host {host}, network {network}, subnet {subnet} ({region})")
+    # 1. the installer may use the subnet (needed for the load balancer IP and forwarding rule). listUsable on the host
+    # project returns exactly the subnets the caller may use (subnetworks.testIamPermissions answers 403 for a grant made
+    # on the subnet itself, so it is only the fallback).
+    check = "shared subnet: installer may use it"
+    usable: bool | None = None
+    list_err = 0
+    try:
+        usable = sub_path in usable_subnet_paths(host, token)
+    except urllib.error.HTTPError as e:
+        list_err = e.code
+    if usable is True:
+        add(check, "PASS", f"{subnet} is in the subnets you may use (listUsable on {host})")
+    elif usable is False:
+        add(check, "FAIL", f"{subnet} is not among the subnets you may use in {host} - not shared with you / no Compute "
+            f"Network User on it; {NETWORK_TEAM}")
+    else:
+        try:
+            r = cp._post(f"{COMPUTE}/{sub_path}/testIamPermissions",
+                         {"permissions": ["compute.subnetworks.use", "compute.subnetworks.get"]}, token)
+            held = set(r.get("permissions", []))
+            add(check, "PASS" if "compute.subnetworks.use" in held else "FAIL",
+                "compute.subnetworks.use held" if "compute.subnetworks.use" in held
+                else f"compute.subnetworks.use missing on {subnet} - {NETWORK_TEAM}")
+        except urllib.error.HTTPError as e:
+            add(check, "WARN", f"cannot confirm (listUsable {list_err}, testIamPermissions {e.code}) - confirm with your "
+                f"network team that the installer has Compute Network User (roles/compute.networkUser) on {subnet}")
+    # 2. the subnet exists in this region and belongs to the named network
+    try:
+        s = get_json(f"{COMPUTE}/{sub_path}", token)
+        net = str(s.get("network", "")).rsplit("/", 1)[-1]
+        purpose = s.get("purpose", "PRIVATE")
+        ok = net == network and purpose in ("PRIVATE", "")
+        add("shared subnet: network and region", "PASS" if ok else "FAIL",
+            f"{subnet} ({s.get('ipCidrRange', '?')}) in {network}, {region}" if ok else
+            (f"{subnet} belongs to network {net}, not {network}" if net != network
+             else f"{subnet} has purpose {purpose} - pick a regular subnet for the gateway IP"))
+    except urllib.error.HTTPError as e:
+        add("shared subnet: network and region", "FAIL",
+            f"{subnet} not found in {host} / {region} ({e.code})" if e.code == 404 else
+            f"cannot read {sub_path} ({e.code}) - {NETWORK_TEAM}")
+    # 3. proxy-only subnet (the regional internal load balancer uses it automatically; never created by us)
+    try:
+        flt = urllib.parse.quote('purpose="REGIONAL_MANAGED_PROXY"', safe="")
+        items = get_json(f"{COMPUTE}/projects/{host}/regions/{region}/subnetworks?filter={flt}", token).get("items", [])
+        mine = [i for i in items if str(i.get("network", "")).rsplit("/", 1)[-1] == network]
+        active = [i for i in mine if i.get("role", "ACTIVE") == "ACTIVE"]
+        add("shared VPC: proxy-only subnet", "PASS" if active else "FAIL",
+            f"{active[0].get('name')} ({active[0].get('ipCidrRange', '?')}) active in {network}, {region}" if active else
+            f"no active proxy-only subnet (purpose REGIONAL_MANAGED_PROXY) in {network}, {region} - ask your network "
+            "team to create one (a /26 or larger) before the install")
+    except urllib.error.HTTPError as e:
+        add("shared VPC: proxy-only subnet", "WARN",
+            f"cannot list the host project's subnets ({e.code}, normal for a service-project installer) - confirm with "
+            f"your network team that {network} has an ACTIVE proxy-only subnet (REGIONAL_MANAGED_PROXY) in {region}")
+    # 4. this project is attached to the host project (readable once the Compute API is enabled)
+    try:
+        x = get_json(f"{COMPUTE}/projects/{project}/getXpnHost", token)
+        attached = x.get("name", "")
+        add("shared VPC: project attached", "PASS" if attached == host else "FAIL",
+            f"{project} is a service project of {host}" if attached == host else
+            f"{project} is {'attached to ' + attached if attached else 'not attached to a host project'} - ask your network "
+            f"team to attach it to {host}")
+    except urllib.error.HTTPError as e:
+        add("shared VPC: project attached", "INFO",
+            f"cannot read the Shared VPC host of {project} yet ({e.code}; Compute API not enabled before the install) - "
+            "the subnet permission check above covers the sharing")
+    # 5. org policies that restrict Shared VPC use (read on this project when readable)
+    for constraint, refs in (("compute.restrictSharedVpcHostProjects", (f"projects/{host}",)),
+                             ("compute.restrictSharedVpcSubnetworks", (sub_path, f"projects/{host}"))):
+        try:
+            pol = effective_policy(project, constraint, token)
+        except urllib.error.HTTPError as e:
+            add(f"org policy {constraint}", "WARN", f"cannot read effective policy ({e.code})")
+            continue
+        allv, allowed, denied = list_values(pol)
+        if allv == "DENY" or _matches(denied, *refs):
+            add(f"org policy {constraint}", "FAIL", f"blocks {refs[0]}")
+        elif not allowed or allv == "ALLOW":
+            add(f"org policy {constraint}", "PASS", "no restriction")
+        elif _matches(allowed, *refs):
+            add(f"org policy {constraint}", "PASS", f"allows {refs[0]}")
+        else:
+            add(f"org policy {constraint}", "WARN",
+                f"allowed list {allowed} does not name {refs[0]} directly (it may be allowed through a folder or "
+                "organisation entry) - confirm with your network team")
+
+
 def check_region(region: str, zone: str) -> None:
     eu = region.startswith("europe-") and region not in ("europe-west2", "europe-west6")  # London, Zurich: non-EU
     add("region", "PASS" if eu else "WARN",
@@ -374,6 +572,8 @@ def write_report(path: pathlib.Path, args: argparse.Namespace, account: str) -> 
     fails = sum(r.status == "FAIL" for r in RESULTS)
     lines += ["", f"**Result: {'BLOCKED - fix the ❌ items' if fails else 'READY'}** "
               f"({fails} blocking, {sum(r.status == 'WARN' for r in RESULTS)} warnings)", ""]
+    for note in NOTES:
+        lines += [note, ""]
     path.write_text("\n".join(lines))
 
 
@@ -390,6 +590,11 @@ def main() -> int:
     ap.add_argument("--org-id", default="")
     ap.add_argument("--no-evidence", action="store_true",
                     help="prompt logging none/hash: skip the deny-policy permissions and the evidence guard check")
+    ap.add_argument("--network-mode", choices=("create", "shared"), default="create",
+                    help="shared = gateway load balancer in an existing Shared VPC subnet (checks subnet use, proxy-only subnet)")
+    ap.add_argument("--shared-vpc-host-project", default="")
+    ap.add_argument("--shared-vpc-network", default="")
+    ap.add_argument("--shared-vpc-subnet", default="")
     ap.add_argument("--report", default=str(pathlib.Path(__file__).resolve().parent.parent / "preflight-report.md"))
     args = ap.parse_args()
     if not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", args.project):
@@ -411,6 +616,10 @@ def main() -> int:
             guarded("permissions", check_permissions, args.project, token, account, args.no_evidence)
             guarded("billing", check_billing, args.project, token)
             guarded("org policies", check_org_policies, args.project, args.region, args.mtls, token)
+            guarded(f"org policy {INVOKER_CONSTRAINT}", check_invoker_iam, args.project, token)
+            if args.network_mode == "shared":
+                guarded("shared VPC", check_shared_vpc, args.project, args.region, args.shared_vpc_host_project,
+                        args.shared_vpc_network, args.shared_vpc_subnet, token)
             guarded("quota", check_quota, args.project, args.region, token)
             if args.no_evidence:
                 add("preserved evidence guard", "INFO", "prompt logging none/hash: no evidence store - not applicable")

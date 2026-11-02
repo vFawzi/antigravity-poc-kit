@@ -34,6 +34,8 @@ A proof of concept for Google Antigravity (agentic AI coding) on your own laptop
 | Security or cloud reviewer | [POC-PERMISSIONS.md](docs/POC-PERMISSIONS.md) (every permission and change) |
 | An admin who wants the commands only | [POC-ADMIN-GUIDE.md](docs/POC-ADMIN-GUIDE.md) |
 | An admin who wants to understand or change the controls | [POC-HOW-IT-WORKS.md](docs/POC-HOW-IT-WORKS.md), [POC-CHANGING-SETTINGS.md](docs/POC-CHANGING-SETTINGS.md) |
+| A network team with an existing Shared VPC | [POC-SHARED-VPC.md](docs/POC-SHARED-VPC.md) |
+| An endpoint admin with Windows 10 laptops | [POC-WINDOWS-10.md](docs/POC-WINDOWS-10.md) |
 | Looking for details or troubleshooting | [POC-TECHNICAL-REFERENCE.md](docs/POC-TECHNICAL-REFERENCE.md) |
 | A developer or contractor in the POC | [POC-USER-GUIDE.md](docs/POC-USER-GUIDE.md) |
 
