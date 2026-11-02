@@ -43,7 +43,7 @@ done_stage() { touch "$STAMP/$1"; echo "stage $1 complete"; }
 echo "=== bootstrap start $(date -Is) mode=$CLIENT_MODE gateway=${GATEWAY_URL:-unset} apparmor=$APPARMOR_MODE"
 
 # ---------------------------------------------------------------- 0. config bundle
-gcloud storage rsync --recursive --delete-unmatched-destination-objects "gs://${CONFIG_BUCKET}/vm" "$CFG"
+gcloud storage rsync --recursive --delete-unmatched-destination-objects "gs://${CONFIG_BUCKET}/endpoint" "$CFG"
 chown -R root:root "$CFG"; chmod -R go-w "$CFG"
 
 # ---------------------------------------------------------------- 1. packages

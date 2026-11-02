@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Attack-pack (poc/attack-pack): scenario schema and deterministic hook scenarios against vm/files/hooks."""
+"""Attack-pack (poc/attack-pack): scenario schema and deterministic hook scenarios against endpoint/files/hooks."""
 from __future__ import annotations
 
 import importlib.util
@@ -27,7 +27,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PACK = ROOT / "poc" / "attack-pack"
-HOOK = ROOT / "vm" / "files" / "hooks" / "agy-hook.py"
+HOOK = ROOT / "endpoint" / "files" / "hooks" / "agy-hook.py"
 POLICY = HOOK.with_name("policy.json")
 
 
@@ -180,7 +180,7 @@ def test_no_secret_like_literals_or_dotenv_in_shipped_files() -> None:
     import re
     rx = re.compile(SECRET_PATTERNS)
     hits, dotenv = [], []
-    for base in ("poc", "gateway/tests", "vm/files", "windows/files"):
+    for base in ("poc", "gateway/tests", "endpoint/files", "windows/files"):
         for f in (ROOT / base).rglob("*"):
             if not f.is_file() or "__pycache__" in f.parts:
                 continue

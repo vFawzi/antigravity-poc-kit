@@ -31,7 +31,7 @@ from typing import Any
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-HOOK = ROOT / "vm" / "files" / "hooks" / "agy-hook.py"
+HOOK = ROOT / "endpoint" / "files" / "hooks" / "agy-hook.py"
 POLICY = HOOK.with_name("policy.json")
 WIN_POLICY = ROOT / "windows" / "files" / "hooks" / "policy.windows.json"
 MAC_POLICY = "/Library/Application Support/Antigravity/hooks/policy.json"

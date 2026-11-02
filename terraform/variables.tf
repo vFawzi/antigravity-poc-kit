@@ -540,7 +540,7 @@ variable "inference_project" {
 }
 
 variable "extra_forwarded_headers" {
-  description = "Extra request header names forwarded to Vertex AI, on top of the customHeaders in vm/files/policies/admin_settings.json. Identity, billing (X-Goog-*), routing and X-AGY-* headers are refused."
+  description = "Extra request header names forwarded to Vertex AI, on top of the customHeaders in endpoint/files/policies/admin_settings.json. Identity, billing (X-Goog-*), routing and X-AGY-* headers are refused."
   type        = list(string)
   default     = []
   validation {

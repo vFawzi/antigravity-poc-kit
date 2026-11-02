@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# AGY Windows egress policy (SSE / host-firewall stand-in; same intent as vm/files/nftables/agy_policy.nft).
+# AGY Windows egress policy (SSE / host-firewall stand-in; same intent as endpoint/files/nftables/agy_policy.nft).
 # Personas (dev, contractor) may reach only their group's allowlisted FQDNs over HTTP(S); everything else from a
 # persona is dropped. Windows Firewall evaluates block before allow, so "deny all but the allowlist" is built as
 # per-user BLOCK rules over the complement of the allowlisted addresses. Runs as SYSTEM every minute (AGY-EgressSync).

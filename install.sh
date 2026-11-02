@@ -410,7 +410,7 @@ run_preflight() {
 config_hash() {   # configuration + code: any change to inputs or to what gets deployed re-runs the phases
   { local f; for f in "$TF_DIR/terraform.tfvars" "$TF_DIR"/*.auto.tfvars; do if [[ -f "$f" ]]; then cat "$f"; fi; done
     find "$TF_DIR" -name '*.tf' -not -path '*/.terraform/*' -print0 | sort -z | xargs -0 cat
-    find "$ROOT/vm" "$ROOT/gateway" -type f \( -name '*.sh' -o -name '*.py' -o -name '*.json' -o -name '*.nft' -o -name '*.ini' \
+    find "$ROOT/endpoint" "$ROOT/gateway" -type f \( -name '*.sh' -o -name '*.py' -o -name '*.json' -o -name '*.nft' -o -name '*.ini' \
       -o -name '*.yaml' -o -name '*.service' -o -name '*.timer' -o -name '*.rules' -o -name 'Dockerfile' -o -name 'requirements.txt' \
       -o -path '*/apparmor/*' \) -not -path '*/.venv/*' -not -path '*/tests/*' -print0 | sort -z | xargs -0 cat
   } | { shasum -a 256 2>/dev/null || sha256sum; } | cut -c1-16

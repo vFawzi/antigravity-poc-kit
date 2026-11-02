@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Seat hardening profile: root-owned PreToolUse policy hook (vm/files/hooks/agy-hook.py)."""
+"""Seat hardening profile: root-owned PreToolUse policy hook (endpoint/files/hooks/agy-hook.py)."""
 from __future__ import annotations
 
 import importlib.util
@@ -24,7 +24,7 @@ import sys
 
 import pytest
 
-HOOK = pathlib.Path(__file__).resolve().parents[2] / "vm" / "files" / "hooks" / "agy-hook.py"
+HOOK = pathlib.Path(__file__).resolve().parents[2] / "endpoint" / "files" / "hooks" / "agy-hook.py"
 POLICY = HOOK.with_name("policy.json")
 spec = importlib.util.spec_from_file_location("agy_hook", HOOK)
 agy_hook = importlib.util.module_from_spec(spec)

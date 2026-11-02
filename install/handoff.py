@@ -149,7 +149,7 @@ Generated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M UTC} by `install.sh` 
 2. Certificate: the device (or your MDM) creates the key and a CSR with SAN `{fleet.get('spiffe_prefix', '')}<device-id>`; sign it with `make fleet-cert DEVICE=<device-id> CSR=<file>` (or your MDM service account in `fleet_issuers`). Lab only: `make fleet-cert DEVICE=<device-id>` generates the key locally.
 3. Network: the device needs private connectivity to {env['AGY_GATEWAY_MTLS_URL']} (VPN, Interconnect or SSE private access) and resolves the name through your DNS.
 4. Probe from the device: `scripts/fleet-probe.sh {env['AGY_GATEWAY_MTLS_URL']} <device>.crt <device>.key gateway-ca.pem` → `http=200 … answer=PONG`.
-5. Client: run the local credential proxy in certificate mode (`AGY_DEVICE_AUTH=cert`, `vm/files/credproxy/agy-credproxy.py`) and deploy `admin_settings.json` (gateway URL = the local proxy, `wireProtocol: "genai"`, no `models` block) to the OS path for the platform.
+5. Client: run the local credential proxy in certificate mode (`AGY_DEVICE_AUTH=cert`, `endpoint/files/credproxy/agy-credproxy.py`) and deploy `admin_settings.json` (gateway URL = the local proxy, `wireProtocol: "genai"`, no `models` block) to the OS path for the platform.
 
 ## 3. Evidence
 

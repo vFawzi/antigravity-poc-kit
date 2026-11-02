@@ -16,7 +16,7 @@ locals {
   evidence_on = contains(["deidentified", "evidence"], var.prompt_logging)
   # Header names the gateway forwards to Vertex AI = admin customHeaders (single source: the managed admin file)
   # + extra_forwarded_headers. Reserved identity/billing headers are refused by the gateway at startup.
-  admin_custom_headers = keys(try(jsondecode(file("${path.root}/../vm/files/policies/admin_settings.json")).gateway.customHeaders, {}))
+  admin_custom_headers = keys(try(jsondecode(file("${path.root}/../endpoint/files/policies/admin_settings.json")).gateway.customHeaders, {}))
   forward_headers      = distinct([for h in concat(local.admin_custom_headers, var.extra_forwarded_headers) : lower(h)])
   # certificate-only device registry (+ the installer's short-lived self-test device, mapped to the most restricted group)
   # Seat mode: the only Antigravity hosts left reachable are the business control plane and the pinned licence location.
@@ -203,8 +203,8 @@ module "workstation" {
   device_ca_pool     = var.enable_mtls && local.gw_on ? module.mtls[0].ca_pool_name : ""
   device_template    = var.enable_mtls && local.gw_on ? module.mtls[0].device_template : ""
   spiffe_prefix      = "spiffe://${var.project_id}.${var.internal_dns_domain}/device/"
-  bootstrap_path     = "${path.root}/../vm/bootstrap.sh"
-  vm_files_dir       = "${path.root}/../vm/files"
+  bootstrap_path     = "${path.root}/../endpoint/bootstrap.sh"
+  vm_files_dir       = "${path.root}/../endpoint/files"
   device_root_pem    = var.enable_mtls && local.gw_on ? module.mtls[0].server_root_pem : ""
   depends_on         = [module.security, module.network]
 }

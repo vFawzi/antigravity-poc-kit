@@ -76,7 +76,7 @@ def test_no_settings_deny_covers_the_cli_brain() -> None:
     # plan mode / artifacts live under ~/.gemini/antigravity-cli/brain: a broader deny (e.g. ~/.gemini or ~) breaks them
     import json
     base = pathlib.Path(__file__).resolve().parents[2]
-    files = list((base / "vm" / "files" / "policies").glob("agy-*.settings.json")) + list((ROOT / "files" / "policies").glob("agy-*.settings.json"))
+    files = list((base / "endpoint" / "files" / "policies").glob("agy-*.settings.json")) + list((ROOT / "files" / "policies").glob("agy-*.settings.json"))
     for f in files:
         user = "dev" if "dev" in f.name else "contractor"
         for brain in (f"/home/{user}/.gemini/antigravity-cli/brain/x", f"C:/Users/{user}/.gemini/antigravity-cli/brain/x"):
@@ -90,7 +90,7 @@ def test_no_settings_deny_covers_the_cli_brain() -> None:
 def test_native_sandbox_bypass_disabled(persona: str) -> None:
     # vendor control, in addition to the hook's deny_sandbox_bypass (defence in depth), on Linux and Windows
     import json
-    for base in (ROOT.parent / "vm" / "files" / "policies", ROOT / "files" / "policies"):
+    for base in (ROOT.parent / "endpoint" / "files" / "policies", ROOT / "files" / "policies"):
         assert json.loads((base / f"{persona}.settings.json").read_text())["disableSandboxBypass"] is True
 
 
@@ -163,7 +163,7 @@ def test_cloud_sdk_for_developers_not_contractors() -> None:
 def test_package_proxy_client_config_on_both_platforms() -> None:
     apply = (ROOT / "files" / "controls" / "Apply-AGYControls.ps1").read_text()
     assert "agy-package-proxy" in apply and "npm_config_registry" in apply and "packageSourceMapping" in apply
-    boot = (ROOT.parent / "vm" / "bootstrap.sh").read_text()
+    boot = (ROOT.parent / "endpoint" / "bootstrap.sh").read_text()
     assert "agy-package-proxy" in boot and "/etc/profile.d/agy-package-proxy.sh" in boot
     assert '"V76"' in (ROOT / "files" / "controls" / "Test-AGYEndpoint.ps1").read_text()
 
@@ -265,7 +265,7 @@ def test_elevation_telemetry_sources() -> None:
     assert 'condition="begin with">HKU' not in text   # volume guard
     apply = (ROOT / "files" / "controls" / "Apply-AGYControls.ps1").read_text()
     assert "Other Object Access Events" in apply and "Security Group Management" in apply
-    ops = (ROOT.parent / "vm" / "files" / "ops-agent" / "config.yaml").read_text()
+    ops = (ROOT.parent / "endpoint" / "files" / "ops-agent" / "config.yaml").read_text()
     assert "/var/log/auth.log" in ops and "agy_priv" in ops and "pkg)" in ops
 
 
@@ -374,7 +374,7 @@ def test_version_management_windows() -> None:
 
 
 def test_version_management_linux() -> None:
-    base = ROOT.parent / "vm"
+    base = ROOT.parent / "endpoint"
     s = (base / "files" / "agy-version-sync.sh").read_text()
     boot = (base / "bootstrap.sh").read_text()
     pol = (base / "files" / "agy-policy-apply.sh").read_text()
@@ -386,7 +386,7 @@ def test_version_management_linux() -> None:
 
 def test_matrix_copies_identical() -> None:
     src = (ROOT.parent / "compat" / "agy-versions.json").read_bytes()
-    for d in (ROOT / "files" / "compat" / "agy-versions.json", ROOT.parent / "vm" / "files" / "compat" / "agy-versions.json"):
+    for d in (ROOT / "files" / "compat" / "agy-versions.json", ROOT.parent / "endpoint" / "files" / "compat" / "agy-versions.json"):
         assert d.read_bytes() == src
 
 
@@ -394,7 +394,7 @@ def test_v84_and_d21() -> None:
     t = (ROOT / "files" / "controls" / "Test-AGYEndpoint.ps1").read_text()
     u = (ROOT / "files" / "controls" / "Update-AGYVersions.ps1").read_text()
     v = (ROOT.parent / "install" / "validate-vm.sh").read_text()
-    s = (ROOT.parent / "vm" / "files" / "agy-version-sync.sh").read_text()
+    s = (ROOT.parent / "endpoint" / "files" / "agy-version-sync.sh").read_text()
     siem = ROOT.parent / "terraform" / "modules" / "siem"
     assert '"V84"' in t and "r \"$res\" V84" in v
     for src in (u, s):
@@ -469,7 +469,7 @@ def test_personas_from_directory_groups() -> None:
     eg = (ROOT / "files" / "controls" / "Sync-AGYEgress.ps1").read_text()
     t = (ROOT / "files" / "controls" / "Test-AGYEndpoint.ps1").read_text()
     b = (ROOT / "bootstrap.ps1").read_text()
-    hook = (ROOT.parent / "vm" / "files" / "hooks" / "agy-hook.py").read_text()
+    hook = (ROOT.parent / "endpoint" / "files" / "hooks" / "agy-hook.py").read_text()
     # personas from the session token (WTSQueryUserToken), remembered per SID; directory group SIDs targeted directly
     assert "WTSQueryUserToken" in c and "persona-profiles.json" in c and '"agy-persona-groups"' in c
     assert "$PersonaProfiles = @(Get-AgyPersonaProfiles)" in a and '$who = "*$($pp.Sid)"' in a and "Personas.Keys" not in a
@@ -499,7 +499,7 @@ def test_mixed_mode() -> None:
 
 
 def test_windows_gateway_proxy_and_enrolment() -> None:
-    proxy = (ROOT.parent / "vm" / "files" / "credproxy" / "agy-credproxy.py").read_text()
+    proxy = (ROOT.parent / "endpoint" / "files" / "credproxy" / "agy-credproxy.py").read_text()
     assert (ROOT / "files" / "credproxy" / "agy-credproxy.py").read_text() == proxy   # one implementation
     # Windows caller identity from the TCP owner process token, persona from group SIDs (contractor wins)
     assert "GetExtendedTcpTable" in proxy and "OpenProcessToken" in proxy and 'for g in ("agy-contractor", "agy-dev")' in proxy

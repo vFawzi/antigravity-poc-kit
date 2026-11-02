@@ -60,6 +60,6 @@ EOF
     reload_profile
     logger -t agy-mdm "ENROLLMENT END user=$USER_NAME policy_sha256=$(sha256sum "$POLICY" | cut -c1-16)"
     aa-status | grep -A1 'enforce mode' | head -2
-    echo "--- merged policy (copy back to repo vm/files/policies/${GRP}.settings.json):"; cat "$POLICY" ;;
+    echo "--- merged policy (copy back to repo endpoint/files/policies/${GRP}.settings.json):"; cat "$POLICY" ;;
   *) echo "usage: agy-enroll start|end <user>"; exit 2 ;;
 esac

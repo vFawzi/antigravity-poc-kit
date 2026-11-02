@@ -34,7 +34,7 @@ def _captured(cap: Any) -> Any:
     return getattr(cap, "read" + "outerr")()
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-HOOK = ROOT / "vm" / "files" / "hooks" / "agy-hook.py"
+HOOK = ROOT / "endpoint" / "files" / "hooks" / "agy-hook.py"
 POLICY = HOOK.with_name("policy.json")
 WIN_POLICY = ROOT / "windows" / "files" / "hooks" / "policy.windows.json"
 AUDIT = ["destructive", "workspace_commands", "workspace_write"]

@@ -24,7 +24,7 @@ import sys
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-HOOK = ROOT / "vm" / "files" / "hooks" / "agy-hook.py"
+HOOK = ROOT / "endpoint" / "files" / "hooks" / "agy-hook.py"
 POLICY = ROOT / "windows" / "files" / "hooks" / "policy.windows.json"
 GEN = POLICY.with_name("gen-policy.py")
 HOME = "C:\\Users\\dev"

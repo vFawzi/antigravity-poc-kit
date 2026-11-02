@@ -21,14 +21,14 @@ flowchart LR
 ### Antigravity and locked settings
 - **What it does:** the install script puts a pinned version of Antigravity on the laptop (Windows: CLI and Desktop app; Mac: CLI) and locks its settings, so the agent always talks to the corporate gateway and keeps human review on.
 - **What the user notices:** Antigravity starts with the corporate settings; the user can't change them. It only runs for the device owner, not for administrators or other users.
-- **Where it is configured:** the persona settings files in the repository (`vm/files/policies/`), copied into each kit.
+- **Where it is configured:** the persona settings files in the repository (`endpoint/files/policies/`), copied into each kit.
 
 ### Corporate hook
 - **What it does:** checks every action the agent wants to take (commands, file reads and writes, tools) before it runs. It blocks access to secrets (SSH keys, `.env` files, cloud credentials, browser passwords), uploads to external hosts, downloaded scripts run in a shell, destructive deletes, unapproved tools, changes to its own controls, and sessions that skip human review.
 - **Personas:** contractors get more blocks (no web search, URL reading or browser tools, no `curl` / `wget`, stricter file rules).
 - **Audit vs enforce:** in week 1 a few rule groups (destructive commands, some workspace commands and file writes) only log instead of blocking. The critical rules (secrets, protected paths, remote scripts, review bypass) always block.
 - **What the user notices:** a blocked action shows "Blocked by corporate policy" with a reason in the conversation.
-- **Where it is configured:** the hook policy files (`vm/files/hooks/policy.json` for Macs, `windows/files/hooks/policy.windows.json` for Windows), copied into each kit.
+- **Where it is configured:** the hook policy files (`endpoint/files/hooks/policy.json` for Macs, `windows/files/hooks/policy.windows.json` for Windows), copied into each kit.
 
 ### Local proxy and the laptop certificate
 - **What it does:** Antigravity sends its model calls to a small proxy on the laptop (`127.0.0.1:8443`). The proxy checks that the caller is the device owner, waits until the locked settings are in place, and forwards the call over the VPN with the laptop's certificate. The certificate's private key is readable only by the system (SYSTEM / Administrators on Windows, root on Mac).

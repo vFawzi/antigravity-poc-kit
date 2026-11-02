@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Device certificate for the gateway front door (Windows, SYSTEM; called by Apply-AGYControls in gateway mode).
-# Same contract as vm/files/credproxy/agy-device-enroll.sh:
+# Same contract as endpoint/files/credproxy/agy-device-enroll.sh:
 #   * ECDSA P-256 key generated on the device, readable by SYSTEM / Administrators only (the persona can't read it)
 #   * certificate from the device CA pool through the device template only (the VM's own service account is the
 #     only requester), SPIFFE URI SAN spiffe://<project>.<internal domain>/device/<instance>, 30 days

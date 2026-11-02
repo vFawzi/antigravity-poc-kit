@@ -33,7 +33,7 @@ def _captured(cap: Any) -> Any:
     return getattr(cap, "read" + "outerr")()
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-PROXY = ROOT / "vm" / "files" / "credproxy" / "agy-credproxy.py"
+PROXY = ROOT / "endpoint" / "files" / "credproxy" / "agy-credproxy.py"
 
 
 @pytest.fixture()

@@ -177,15 +177,15 @@ def copy_windows_bundle(dest: Path) -> None:
 
 
 MACOS_BUNDLE = {   # kit path -> repository source (the macOS endpoint reuses the Linux hook, policy, proxy and settings)
-    "hooks/agy-hook.py": "vm/files/hooks/agy-hook.py",
-    "hooks/policy.json": "vm/files/hooks/policy.json",
-    "hooks/hooks.json": "vm/files/hooks/hooks.json",
-    "credproxy/agy-credproxy.py": "vm/files/credproxy/agy-credproxy.py",
-    "policies/admin_settings.json": "vm/files/policies/admin_settings.json",
-    "policies/agy-dev.settings.json": "vm/files/policies/agy-dev.settings.json",
-    "policies/agy-contractor.settings.json": "vm/files/policies/agy-contractor.settings.json",
-    "policies/agy-dev.mcp_config.json": "vm/files/policies/agy-dev.mcp_config.json",
-    "policies/agy-contractor.mcp_config.json": "vm/files/policies/agy-contractor.mcp_config.json",
+    "hooks/agy-hook.py": "endpoint/files/hooks/agy-hook.py",
+    "hooks/policy.json": "endpoint/files/hooks/policy.json",
+    "hooks/hooks.json": "endpoint/files/hooks/hooks.json",
+    "credproxy/agy-credproxy.py": "endpoint/files/credproxy/agy-credproxy.py",
+    "policies/admin_settings.json": "endpoint/files/policies/admin_settings.json",
+    "policies/agy-dev.settings.json": "endpoint/files/policies/agy-dev.settings.json",
+    "policies/agy-contractor.settings.json": "endpoint/files/policies/agy-contractor.settings.json",
+    "policies/agy-dev.mcp_config.json": "endpoint/files/policies/agy-dev.mcp_config.json",
+    "policies/agy-contractor.mcp_config.json": "endpoint/files/policies/agy-contractor.mcp_config.json",
 }
 
 

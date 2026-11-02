@@ -29,16 +29,16 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "vm" / "files" / "policies"
+SRC = ROOT / "endpoint" / "files" / "policies"
 OUT = ROOT / "windows" / "files" / "policies"
-HOOK_SRC = ROOT / "vm" / "files" / "hooks" / "agy-hook.py"
+HOOK_SRC = ROOT / "endpoint" / "files" / "hooks" / "agy-hook.py"
 HOOK_OUT = ROOT / "windows" / "files" / "hooks" / "agy-hook.py"
 # AGY version support matrix: one source (compat/), copied into both endpoint bundles
 MATRIX_SRC = ROOT / "compat" / "agy-versions.json"
 # credential proxy: one implementation for Linux and Windows (gateway mode)
-PROXY_SRC = ROOT / "vm" / "files" / "credproxy" / "agy-credproxy.py"
+PROXY_SRC = ROOT / "endpoint" / "files" / "credproxy" / "agy-credproxy.py"
 PROXY_OUT = ROOT / "windows" / "files" / "credproxy" / "agy-credproxy.py"
-MATRIX_OUT = [ROOT / "windows" / "files" / "compat" / "agy-versions.json", ROOT / "vm" / "files" / "compat" / "agy-versions.json"]
+MATRIX_OUT = [ROOT / "windows" / "files" / "compat" / "agy-versions.json", ROOT / "endpoint" / "files" / "compat" / "agy-versions.json"]
 
 WS = "D:/projects"
 PYTHON = r"C:\Program Files\Python312\python.exe"

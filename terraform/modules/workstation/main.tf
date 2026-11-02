@@ -132,7 +132,7 @@ resource "google_storage_bucket_iam_member" "vm_read" {
 resource "google_storage_bucket_object" "files" {
   for_each       = local.files
   bucket         = google_storage_bucket.cfg.name
-  name           = "vm/${each.value}"
+  name           = "endpoint/${each.value}"
   source         = "${var.vm_files_dir}/${each.value}"
   content_type   = "text/plain"
   detect_md5hash = filemd5("${var.vm_files_dir}/${each.value}")

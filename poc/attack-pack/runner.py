@@ -47,7 +47,7 @@ from typing import Any
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SCENARIOS = HERE / "scenarios.json"
-DEFAULT_HOOK = REPO / "vm" / "files" / "hooks" / "agy-hook.py"
+DEFAULT_HOOK = REPO / "endpoint" / "files" / "hooks" / "agy-hook.py"
 DEFAULT_POLICY = {"linux": DEFAULT_HOOK.with_name("policy.json"), "macos": DEFAULT_HOOK.with_name("policy.json"),
                   "windows": REPO / "windows" / "files" / "hooks" / "policy.windows.json"}
 
