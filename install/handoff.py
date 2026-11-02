@@ -155,6 +155,9 @@ def write_gateway_profile(od: pathlib.Path, project: str, region: str, env: dict
     devices = fleet.get("devices", [])
     groups = ", ".join(f"`{g}`" for g in kit.get("groups", {}))
     title = "AGY POC gateway - device hand-off" if poc else "AGY enterprise gateway - device onboarding hand-off"
+    evidence_how = ("Cloud console > Logging > Log Analytics > Saved queries (`AGY - ...`), or "
+                    f"`gcloud logging read 'jsonPayload.component=\"agy-gateway\"' --project {project} --freshness 1h`"
+                    if poc else "`make logs`")
     by = "`poc/poc-gateway.sh` (POC gateway)" if poc else "`install.sh` (gateway profile)"
     md = f"""# {title}
 
@@ -184,7 +187,7 @@ Generated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M UTC} by {by}. Non-sec
 
 ## 3. Evidence
 
-`make logs` (gateway decisions; fleet devices appear with `device.kind=fleet`, `device.device_id`, the registry user/group and the client-reported `os_user`), rejections as `DEVICE_REJECTED` (`fleet_device_unregistered`, `fleet_cert_required`, `mtls_*`), Vertex AI attribution in the Data Access audit log (V91).
+{evidence_how} (gateway decisions; fleet devices appear with `device.kind=fleet`, `device.device_id`, the registry user/group and the client-reported `os_user`), rejections as `DEVICE_REJECTED` (`fleet_device_unregistered`, `fleet_cert_required`, `mtls_*`), Vertex AI attribution in the Data Access audit log (V91).
 
 {"`poc/poc-gateway.sh --destroy`" if poc else "`./install.sh --destroy`"} removes everything.
 """

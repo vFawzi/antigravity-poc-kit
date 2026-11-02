@@ -357,9 +357,10 @@ def build_kit(devices: list[Device], certs: Path, out: Path, gateway_url: str, g
             shutil.copyfile(src, kd / name)
             os.chmod(kd / name, 0o600)
         script = POC_DIR / OS_SCRIPTS[d.os]
-        if script.is_file():
-            shutil.copyfile(script, kd / script.name)
-            os.chmod(kd / script.name, 0o700)
+        if not script.is_file():   # never write a kit without its install script
+            raise KitError(f"{d.device}: endpoint script {script.name} missing in {POC_DIR} (incomplete repository copy?)")
+        shutil.copyfile(script, kd / script.name)
+        os.chmod(kd / script.name, 0o700)
         if d.os in WINDOWS_OS:
             copy_windows_bundle(kd)
         elif d.os == "macos":

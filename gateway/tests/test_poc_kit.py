@@ -265,3 +265,20 @@ def test_image_probe_permission_denied_fails_clearly_instead_of_rebuilding() -> 
     assert "images describe" not in p4 and "/packages/agy-gateway/tags/" in p4
     perms = (ROOT / "install" / "permissions.txt").read_text().split()
     assert "artifactregistry.tags.get" in perms
+
+
+def test_every_endpoint_script_ships_with_the_kit_builder() -> None:
+    # runs in the published trees too: a script missing from the release list fails here, not on a customer laptop
+    for os_name, script in poc_kit.OS_SCRIPTS.items():
+        assert (ROOT / "poc" / script).is_file(), f"{os_name}: poc/{script} missing"
+
+
+def test_kit_refuses_a_missing_endpoint_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    csvp = write_csv(tmp_path, "w10-01,a@example.com,dev,windows10\n")
+    certs = tmp_path / "certs"
+    certs.mkdir()
+    _self_signed(certs / "w10-01.crt", "w10-01")
+    _self_signed(certs / "gateway-ca.pem", "ca")
+    monkeypatch.setitem(poc_kit.OS_SCRIPTS, "windows10", "does-not-exist.ps1")
+    with pytest.raises(poc_kit.KitError, match="endpoint script does-not-exist.ps1 missing"):
+        poc_kit.build_kit(poc_kit.read_devices(csvp), certs, tmp_path / "k", "https://gw", "", "p", "r")

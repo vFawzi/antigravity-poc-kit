@@ -439,6 +439,13 @@ net_error() {   # net_error <log> -> 0 when the failure is a network problem (no
   grep -Eiq 'cannot assign requested address|connection reset|i/o timeout|no route to host' "$1" 2>/dev/null
 }
 
+invoker_iam_blocked() {   # Cloud Run create refused by run.managed.requireInvokerIam: not propagation - stop with the fix
+  warn "the organisation policy run.managed.requireInvokerIam blocks the gateway (this is not a propagation delay)"
+  python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import preflight; print(preflight.invoker_iam_guidance(sys.argv[2]))' \
+    "$ROOT/install" "$PROJECT_ID" >&2 || true
+  die "add the exception, wait 2-3 min, run $([[ -n "${AGY_POC:-}" ]] && echo "poc/poc-gateway.sh --yes" || echo "./install.sh")"
+}
+
 retry() {   # retry <attempts> <sleep> cmd... - absorbs IAM / API-enablement propagation on clean projects
   local n="$1" s="$2" i rc log; shift 2
   log="$(mktemp)"
@@ -447,6 +454,7 @@ retry() {   # retry <attempts> <sleep> cmd... - absorbs IAM / API-enablement pro
     rc=0
     if { "$@" 2>&1 1>&3 3>&- | tee "$log" >&2; rc=${PIPESTATUS[0]}; } 3>&1; then :; fi
     [[ $rc -eq 0 ]] && { rm -f "$log"; return 0; }
+    if grep -q "constraints/run.managed.requireInvokerIam" "$log" 2>/dev/null; then rm -f "$log"; invoker_iam_blocked; fi
     [[ $i -lt $n ]] || break
     if net_error "$log"; then
       if [[ $NET_HINT_SHOWN -eq 0 ]]; then
@@ -951,6 +959,7 @@ p7_validate() {
   tf plan -input=false -detailed-exitcode -var "gateway_image=$(current_image)" >/dev/null 2>&1 || plan_rc=$?
   if [[ $plan_rc -eq 0 ]]; then out+=$'\n'"RESULT|PASS|V90|Terraform converged (plan: no changes)|"
   else out+=$'\n'"RESULT|WARN|V90|Terraform converged (plan: no changes)|plan exit code $plan_rc"; fi
+  out="$(grep '^RESULT|' <<<"$out" || true)"   # checks that don't apply print nothing: no empty rows in the report
   fails=$(grep -c '^RESULT|FAIL|' <<<"$out" || true); warns=$(grep -c '^RESULT|WARN|' <<<"$out" || true)
   {
     echo "# AGY POC install report"; echo
@@ -1066,7 +1075,8 @@ if phase_done p2; then tf init -input=false -reconfigure -backend-config=backend
 phase_done p3 || { p3_foundation; p3b_token_key; mark p3; }
 { phase_done p4 && [[ -f "$STATE_DIR/image" ]]; } || { p4_image; mark p4; }
 phase_done p5 || { p5_gateway; mark p5; }
-if [[ "$PROFILE" == "gateway" ]]; then log "gateway profile: no reference workstation (phase 6 skipped)"
+if [[ -n "${AGY_POC:-}" ]]; then log "POC: your laptops are the devices - the optional cloud reference workstation is not part of the POC (phase 6 skipped)"
+elif [[ "$PROFILE" == "gateway" ]]; then log "gateway profile: no reference workstation (phase 6 skipped)"
 else phase_done p6 || { p6_endpoint; mark p6; }; fi
 RC=0; p7_validate || RC=$?
 p8_handoff
@@ -1096,8 +1106,18 @@ cat <<F
    Cost control       : make stop   /   make start
 F
 fi )
+$( if [[ -n "${AGY_POC:-}" ]]; then
+cat <<P
+   Evidence           : Cloud console > Logging > Log Analytics > Saved queries (AGY - ...), or:
+                        gcloud logging read 'jsonPayload.component="agy-gateway"' --project ${PROJECT_ID} --freshness 1h
+   Remove             : poc/poc-gateway.sh --destroy
+P
+else
+cat <<G
    Gateway audit log  : make logs
    Remove             : ./install.sh --destroy
+G
+fi )
 =====================================================================
 MSG
 exit $RC

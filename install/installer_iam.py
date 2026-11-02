@@ -56,7 +56,8 @@ HELP_ORG = """Folder / organization level:
     creating the project / linking billing is out of scope (create the project first)."""
 
 os.environ["CLOUDSDK_CORE_DISABLE_PROMPTS"] = "1"   # a hidden gcloud prompt (output captured) would hang the grant
-BOOTSTRAP_APIS = ("cloudresourcemanager.googleapis.com", "iam.googleapis.com", "serviceusage.googleapis.com")
+BOOTSTRAP_APIS = ("cloudresourcemanager.googleapis.com", "iam.googleapis.com", "serviceusage.googleapis.com",
+                  "orgpolicy.googleapis.com")   # Org Policy: the preflight reads run.managed.requireInvokerIam
 BOOTSTRAP_WAIT_TRIES, BOOTSTRAP_WAIT_SECONDS = 12, 10   # ~2 min for a freshly enabled API to answer
 SLEEP = time.sleep
 
@@ -72,7 +73,7 @@ def token() -> str:
 def enable_bootstrap_apis(project: str) -> None:
     """Greenfield projects: Cloud Resource Manager / IAM / Service Usage are off, and every later call needs them.
     Enabled as the admin with gcloud (works before any API of the project is on), then wait until they answer."""
-    print(f"[grant] enabling bootstrap APIs on {project} (Cloud Resource Manager, IAM, Service Usage)")
+    print(f"[grant] enabling bootstrap APIs on {project} (Cloud Resource Manager, IAM, Service Usage, Org Policy)")
     cmd = ["gcloud", "services", "enable", *BOOTSTRAP_APIS, "--project", project, "--quiet"]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=600)

@@ -401,8 +401,11 @@ def check_invoker_iam(project: str, token: str) -> None:
                 break
     if pol is None:
         add(f"org policy {INVOKER_CONSTRAINT}", "WARN",
-            f"cannot read the effective policy ({err}) - check: gcloud org-policies describe {INVOKER_CONSTRAINT} "
-            f"--effective --project {project} (enforced = the gateway is refused; see the installation guide)")
+            f"could not read ({err}; Org Policy API disabled or no permission): if {INVOKER_CONSTRAINT} is enforced the "
+            f"gateway deploy will fail; check with: gcloud org-policies describe {INVOKER_CONSTRAINT} --effective "
+            f"--project {project}; fix: see the section below this table (project exception)")
+        NOTES.append("_Shown because the policy could not be read; only needed if it is enforced._\n\n"
+                     + invoker_iam_guidance(project))
         return
     if policy_enforced(pol):
         add(f"org policy {INVOKER_CONSTRAINT}", "FAIL",
