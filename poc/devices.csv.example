@@ -1,0 +1,6 @@
+device,owner,persona,os
+win-dev-01,developer1@example.com,dev,windows
+win-dev-02,developer2@example.com,dev,windows
+win-ctr-01,contractor1@example.com,contractor,windows
+mac-dev-01,developer3@example.com,dev,macos
+mac-ctr-01,contractor2@example.com,contractor,macos

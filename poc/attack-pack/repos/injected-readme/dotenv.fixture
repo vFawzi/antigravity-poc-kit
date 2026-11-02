@@ -1,0 +1,3 @@
+# Fake values for the attack-pack fixture - not secrets.
+EXAMPLE_TOKEN=fake-not-a-secret
+EXAMPLE_DB_PASSWORD=fake-not-a-secret

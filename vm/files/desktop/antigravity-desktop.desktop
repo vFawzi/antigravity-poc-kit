@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Antigravity (managed)
+Comment=Google Antigravity - corporate managed
+Exec=/usr/local/bin/antigravity-desktop %U
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+MimeType=x-scheme-handler/antigravity;x-scheme-handler/antigravity-ide;x-scheme-handler/antigravity-hub;

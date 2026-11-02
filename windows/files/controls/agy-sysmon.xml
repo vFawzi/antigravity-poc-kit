@@ -1,0 +1,55 @@
+<!--
+  AGY Sysmon configuration (applied and drift-corrected by Apply-AGYControls.ps1; Sysmon binary baked into the image).
+  Focus: process lineage under the agent (event 1 -> SIEM v_agent_process_tree), outbound connections of developer
+  tools and own builds (event 3), writes to configuration that executes code and to credential / agent folders
+  (event 11), app-control and firewall registry tampering (events 12-14). Volume: process terminate (5) and image
+  loads (7) are off.
+-->
+<Sysmon schemaversion="4.90">
+  <HashAlgorithms>SHA256</HashAlgorithms>
+  <CheckRevocation>False</CheckRevocation>
+  <EventFiltering>
+    <RuleGroup name="process" groupRelation="or">
+      <ProcessCreate onmatch="exclude">
+        <!-- the Ops Agent / GCE agents start helpers every few seconds -->
+        <ParentImage condition="end with">\google-cloud-ops-agent-wrapper.exe</ParentImage>
+        <Image condition="end with">\GCEWindowsAgent.exe</Image>
+      </ProcessCreate>
+    </RuleGroup>
+    <RuleGroup name="network" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <Image condition="contains any">\Antigravity\;\agy.exe;language_server;\powershell.exe;\pwsh.exe;\cmd.exe;\curl.exe;\git;\python;\node.exe;\dotnet.exe;\java.exe;\go.exe</Image>
+        <Image condition="begin with">D:\build\</Image>
+        <Image condition="contains">\node_modules\</Image>
+        <Image condition="contains">\.dotnet\tools\</Image>
+      </NetworkConnect>
+    </RuleGroup>
+    <RuleGroup name="files" groupRelation="or">
+      <FileCreate onmatch="include">
+        <TargetFilename condition="contains any">\ProgramData\Antigravity\;\.gemini\;\.agents\;\.ssh\;\.git\hooks\;\.vscode\;\.idea\;\.github\workflows\;\.devcontainer\;\Start Menu\Programs\Startup\</TargetFilename>
+        <TargetFilename condition="end with">profile.ps1</TargetFilename>
+        <!-- one "end with" per name: Sysmon 15.22 crashes (0xC0000409) on condition="end with any" -->
+        <TargetFilename condition="end with">\.git\config</TargetFilename>
+        <TargetFilename condition="end with">\NuGet.config</TargetFilename>
+        <TargetFilename condition="end with">\.npmrc</TargetFilename>
+        <TargetFilename condition="end with">\pip.ini</TargetFilename>
+        <TargetFilename condition="end with">\Directory.Build.props</TargetFilename>
+        <TargetFilename condition="end with">\Directory.Build.targets</TargetFilename>
+        <TargetFilename condition="end with">.targets</TargetFilename>
+        <TargetFilename condition="end with">\AGENTS.md</TargetFilename>
+        <TargetFilename condition="end with">\GEMINI.md</TargetFilename>
+        <TargetFilename condition="end with">\mcp_config.json</TargetFilename>
+        <TargetFilename condition="begin with">D:\build\</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+    <RuleGroup name="registry" groupRelation="or">
+      <RegistryEvent onmatch="include">
+        <TargetObject condition="contains any">\Policies\Microsoft\Windows\SrpV2;\CI\Policy;\WindowsFirewall;\Session Manager\Environment</TargetObject>
+        <!-- user-scope persistence and trust (D15 / D17): Run keys, user environment, user-trusted root certificates -->
+        <TargetObject condition="contains any">\CurrentVersion\Run;\CurrentVersion\RunOnce;\SystemCertificates\Root\Certificates\;\Explorer\Shell Folders;\Environment\</TargetObject>
+      </RegistryEvent>
+    </RuleGroup>
+    <ProcessTerminate onmatch="include" />
+    <ImageLoad onmatch="include" />
+  </EventFiltering>
+</Sysmon>

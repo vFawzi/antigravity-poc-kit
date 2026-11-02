@@ -1,0 +1,44 @@
+{
+  "corp-policy-gate": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\ProgramData\\Antigravity\\hooks\\agy-hook.cmd PreToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "corp-audit": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\ProgramData\\Antigravity\\hooks\\agy-hook.cmd PostToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "C:\\ProgramData\\Antigravity\\hooks\\agy-hook.cmd SessionStart",
+        "timeout": 10
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "C:\\ProgramData\\Antigravity\\hooks\\agy-hook.cmd PreInvocation",
+        "timeout": 10
+      }
+    ]
+  }
+}

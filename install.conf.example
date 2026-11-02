@@ -1,0 +1,26 @@
+# Answers for unattended installs:  cp install.conf.example install.conf && ./install.sh --yes
+# (interactive ./install.sh writes this file for you). No secrets. install.conf is git-ignored.
+# full = reference workstation + gateway | gateway = gateway only, certificate-only devices (your fleet)
+PROFILE="full"
+PROJECT_ID="my-agy-project"
+REGION="europe-west4"
+ZONE="europe-west4-a"
+OPERATORS="user:admin@example.com"
+SECOPS_EMAIL="secops@example.com"
+COST_CENTER="security"
+INTERNAL_DNS_DOMAIN="agy.internal"
+ENABLE_MTLS="y"
+DESKTOP_ACCESS="xrdp"
+RDP_CLIPBOARD="allow"
+INSTALL_DESKTOP_APP="y"
+APPARMOR_MODE="enforce"
+# blocked-prompt audit trail: none | hash | deidentified | evidence
+PROMPT_LOGGING="evidence"
+EVIDENCE_RETENTION_DAYS="365"
+INVESTIGATORS="user:admin@example.com"
+INVESTIGATION_APPROVERS=""
+# certificate-only devices (laptops / CI runners): y adds the fleet CA pool + registry (always y for PROFILE=gateway)
+FLEET="n"
+FLEET_ISSUERS=""
+# required for --yes: acknowledges the cost estimate shown by the interactive installer
+COST_ACK="yes"

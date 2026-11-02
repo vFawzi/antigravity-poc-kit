@@ -1,0 +1,8 @@
+[Unit]
+Description=AGY egress allowlist sync (every minute)
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=1min
+Unit=agy-egress-sync.service
+[Install]
+WantedBy=timers.target

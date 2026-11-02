@@ -1,0 +1,11 @@
+[Unit]
+Description=AGY device certificate enrolment / renewal
+After=network-online.target
+Wants=network-online.target
+# retry forever (first boot: CAS IAM propagation); success ends the run
+StartLimitIntervalSec=0
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/agy-device-enroll
+Restart=on-failure
+RestartSec=60

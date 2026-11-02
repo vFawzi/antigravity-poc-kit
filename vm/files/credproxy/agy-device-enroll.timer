@@ -1,0 +1,8 @@
+[Unit]
+Description=AGY device certificate renewal (daily)
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1d
+Unit=agy-device-enroll.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,28 @@
+[Unit]
+Description=AGY local credential proxy (Antigravity Enterprise Gateway mode)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=agy-credproxy
+Group=agy-credproxy
+ExecStart=/usr/bin/python3 /opt/agy-credproxy/agy-credproxy.py
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+ReadOnlyPaths=/etc/antigravity /etc/agy-credproxy
+
+[Install]
+WantedBy=multi-user.target

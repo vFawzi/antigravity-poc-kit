@@ -1,0 +1,8 @@
+Antigravity Secure Endpoint - reference implementation
+
+This is a proof-of-concept reference implementation provided "as is", without warranty of any kind,
+for evaluation and adaptation. It is not an officially supported product. Endpoint controls in this
+repository (AppArmor, root scripts, nftables) are stand-ins for enterprise EDR, MDM and SSE tooling.
+Validate security, compliance and cost implications in your own environment before production use.
+
+Google Cloud, Vertex AI, Model Armor, Gemini and Antigravity are trademarks of Google LLC.

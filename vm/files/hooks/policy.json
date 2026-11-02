@@ -1,0 +1,347 @@
+{
+  "_comment": "Root-owned policy for /usr/local/libexec/agy-hook. Regexes (Python re) on the full command line (also matches env/command/bash -c wrappers and absolute paths). default applies to every group; groups add to it. ask_commands = user approval; workspace_only_commands = allowed only on paths inside the persona workspace. deny_write_files / exec_content_* / deny_config_commands / gcloud_deny_verbs: shared with windows/files/hooks/gen-policy.py (kept identical by a unit test); agent_service_account is set per group from metadata agy-agent-sa. audit_classes = rule classes whose denies are only logged (AUDIT_ALLOW) and allowed - destructive, workspace_write, workspace_commands only; a group list replaces the default list; critical classes are always enforced. mcp_allowed_servers = MCP servers the agent may call ([] = none; a group list replaces the default list). deny_write_secrets = credentials ({name, regex}) the agent may not write into files.",
+  "default": {
+    "deny_commands": [
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(ssh|scp|sftp|telnet|nc|ncat|netcat|socat|nmap|masscan|zmap|hping3)(\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(shred|srm|wipe|gpg)(\\s|$)",
+      "openssl\\s+enc\\b",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(sendmail|swaks|mutt|mail)(\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(jamf|nsdiag|vpncli)(\\s|$)",
+      "/opt/corp-tools/",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(sudo|su|doas|pkexec|chattr|chflags)(\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?curl\\b[^;|&]*\\s(-d|--data\\S*|-F|--form\\S*|-T|--upload-file|--json)(\\s|=|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?wget\\b[^;|&]*\\s--(post-data|post-file|body-data|body-file|method=(POST|PUT|PATCH))",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(ba|z|da|k)?sh\\s+(-\\S+\\s+)*-[a-zA-Z]*i",
+      "/dev/(tcp|udp)/",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(xdg-open|sensible-browser|x-www-browser|exo-open|google-chrome\\S*|chromium\\S*|firefox|gio\\s+open|kde-open\\S*|gnome-open)(\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(ngrok|cloudflared|devtunnel|localtunnel|lt|bore|frpc)(\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(code|code-insiders)\\s+tunnel\\b",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(tailscale)\\s+(?:funnel|serve)\\b",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(run0|machinectl|systemd-run|newgrp|sg|setcap|usermod|gpasswd|at|chsh|chfn|update-ca-certificates)(\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(loginctl)\\s+enable-linger\\b",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(sysctl)\\b[^;|&]*\\s-w\\b",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(certutil)\\b(?=[^;|&]*\\s-d\\s+['\\\"]?sql:)[^;|&]*\\s-[ADEMN]\\b",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(trust)\\s+anchor\\b",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(crontab)(?!\\s+-l(?:\\s|$))(?:\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(docker|podman|nerdctl)[^;|&]*(?:\\s(?:--privileged|--cap-add|--device)\\b|\\s--(?:pid|network|net|ipc|userns|uts)[= ]host\\b|\\s--security-opt[= ]\\S*unconfined|\\s(?:-v|--volume)[= ]?['\\\"]?/:|docker\\.sock|docker_engine|\\s--mount[= ]\\S*source=/[,\\s])",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(curl|wget)(?:\\s[^;&]*)?\\|\\s*(?:sudo(?:\\s+-\\S+)*\\s+|env(?:\\s+-\\S+)*(?:\\s+[A-Za-z_]\\w*=\\S*)*\\s+)?(?:\\S*/)?(sh|bash|zsh|dash|ksh|python(?:\\d+(?:\\.\\d+)?)?|perl|ruby|node|php)(?:\\s+-[A-Za-z]+)*(?:\\s+--?(?=\\s|$|['\\\"])|\\s*(?=$|[;&|)]|['\\\"]\\s*(?:$|[;&|)])))",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(sh|bash|zsh|dash|ksh|python(?:\\d+(?:\\.\\d+)?)?|perl|ruby|node|php|source|eval|\\.)\\s[^;&|]*?(?:<\\(|\\$\\(|`)\\s*(?:\\S*/)?(curl|wget)(\\s|$)",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?git\\b[^;&|]*?\\spush\\b[^;&|]*?(?:\\s--repo[= ]|\\s['\\\"]?(?:(?:https?|ssh|git|file|ftps?)://|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:|[/~]|\\.\\.?/))",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(?:(base64|base32|basenc)\\b[^;&|]*?\\s(?:-[A-Za-z]*[dD][A-Za-z]*(?=\\s|$|[|)'\"])|--decode\\b)|xxd\\b[^;&|]*?\\s-[A-Za-z]*r|openssl\\s+(?:base64|enc)\\b[^;&|]*?\\s-d\\b)[^;&]*\\|\\s*(?:sudo(?:\\s+-\\S+)*\\s+|env(?:\\s+-\\S+)*(?:\\s+[A-Za-z_]\\w*=\\S*)*\\s+)?(?:\\S*/)?(sh|bash|zsh|dash|ksh|python(?:\\d+(?:\\.\\d+)?)?|perl|ruby|node|php)(?:\\s+-[A-Za-z]+)*(?:\\s+--?(?=\\s|$|['\\\"])|\\s*(?=$|[;&|)]|['\\\"]\\s*(?:$|[;&|)])))",
+      "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(sh|bash|zsh|dash|ksh|python(?:\\d+(?:\\.\\d+)?)?|perl|ruby|node|php|source|eval|\\.)\\s[^;&|]*?(?:<\\(|\\$\\(|`)[^)`]*?(?:(base64|base32|basenc)\\b[^)`]*?\\s(?:-[A-Za-z]*[dD][A-Za-z]*(?=\\s|$|[|)'\"])|--decode\\b)|xxd\\b[^)`]*?\\s-[A-Za-z]*r|openssl\\s+(?:base64|enc)\\b[^)`]*?\\s-d\\b)"
+    ],
+    "deny_paths": [
+      "/secure-admin",
+      "/root",
+      "/etc/shadow",
+      "/etc/gshadow",
+      "/etc/sudoers",
+      "/etc/antigravity",
+      "/Library/Application Support/Antigravity",
+      "/etc/agy-credproxy",
+      "/opt/corp-tools",
+      "~/.ssh",
+      "~/.gnupg",
+      "~/.aws",
+      "~/.config/gcloud",
+      "~/.docker",
+      "~/.kube",
+      "~/.netrc",
+      "~/.git-credentials",
+      "~/.config/gh",
+      "~/.local/share/keyrings",
+      "~/Library/Keychains",
+      "~/Library/Application Support/Google/Chrome",
+      "~/Library/Application Support/Firefox",
+      "~/Library/Application Support/Microsoft Edge",
+      "~/Library/Safari",
+      "~/Library/Cookies",
+      "~/.mozilla",
+      "~/.config/google-chrome",
+      "~/.config/chromium",
+      "~/.config/microsoft-edge",
+      "~/.config/BraveSoftware"
+    ],
+    "deny_tools": [],
+    "ask_commands": [],
+    "workspace_only_commands": [
+      "chmod",
+      "chown",
+      "chgrp"
+    ],
+    "workspace": "/data/projects/{user}",
+    "write_tools": "(write|edit|replace|create|delete|remove|move|rename|patch|append|save)",
+    "write_also": [
+      "~/.gemini/antigravity-cli/brain"
+    ],
+    "deny_file_globs": [
+      ".env",
+      ".env.*",
+      "*.env",
+      "*.pem",
+      "id_rsa",
+      "id_ed25519",
+      "*.p12",
+      "*.pfx",
+      "credentials.json"
+    ],
+    "allow_file_globs": [
+      ".env.example",
+      ".env.sample",
+      ".env.template",
+      ".env.dist",
+      ".env.defaults",
+      "*.env.example",
+      "*.env.sample",
+      "*.env.template"
+    ],
+    "deny_sandbox_bypass": true,
+    "deny_write_dirnames": [
+      ".agents",
+      ".gemini",
+      ".antigravity"
+    ],
+    "deny_write_files": [
+      ".git/hooks/**",
+      ".git/config",
+      ".gitmodules",
+      ".envrc",
+      "nuget.config",
+      ".npmrc",
+      ".yarnrc",
+      ".yarnrc.yml",
+      ".pnpmfile.cjs",
+      "pip.conf",
+      "pip.ini",
+      ".pypirc",
+      ".terraformrc",
+      "terraform.rc",
+      ".devcontainer/**",
+      "devcontainer.json",
+      ".vscode/**",
+      ".idea/**",
+      "*.code-workspace",
+      "Directory.Build.props",
+      "Directory.Build.targets",
+      "Directory.Build.rsp",
+      "Directory.Packages.props",
+      "*.targets",
+      ".github/workflows/**",
+      ".github/actions/**",
+      "azure-pipelines*.yml",
+      "azure-pipelines*.yaml",
+      "cloudbuild*.yaml",
+      "cloudbuild*.yml",
+      ".gitlab-ci.yml",
+      "Jenkinsfile",
+      ".pre-commit-config.yaml",
+      ".husky/**",
+      "AGENTS.md",
+      "GEMINI.md",
+      "mcp_config.json",
+      ".mcp.json",
+      "*.exe",
+      "*.dll",
+      "*.com",
+      "*.scr",
+      "*.msi",
+      "*.sys",
+      "*.cpl",
+      "Start Menu/Programs/Startup/**",
+      "*profile.ps1",
+      ".bashrc",
+      ".bash_profile",
+      ".profile",
+      ".zshrc",
+      ".zprofile",
+      ".pam_environment",
+      ".config/autostart/**",
+      ".config/systemd/**",
+      ".config/environment.d/**",
+      ".local/share/applications/**",
+      ".pki/**",
+      "Library/LaunchAgents/**",
+      "Library/LaunchDaemons/**"
+    ],
+    "exec_content_files": [
+      "*.csproj",
+      "*.vbproj",
+      "*.fsproj",
+      "*.vcxproj",
+      "*.proj",
+      "*.props",
+      "package.json"
+    ],
+    "exec_content_patterns": [
+      "(?i)<\\s*Exec\\b",
+      "(?i)<\\s*UsingTask\\b",
+      "(?i)\\bTaskFactory\\b",
+      "\\\"(?:pre|post)?install\\\"\\s*:",
+      "\\\"prepare\\\"\\s*:",
+      "\\\"(?:pre|post)(?:pack|publish)\\\"\\s*:",
+      "\\\"prepublish(?:Only)?\\\"\\s*:"
+    ],
+    "deny_config_commands": [
+      "(?i)\\b(?:npx|pnpx|bunx|dlx)(?:\\.cmd)?\\s+(?:-\\S+\\s+)*(?:localtunnel|lt|ngrok|cloudflared)(?:@\\S*)?(?:\\s|$)",
+      "(?i)\\bgit(?:\\.exe)?\\s+(?:-\\S+\\s+)*config\\b(?![^;|&]*\\s(?:--get\\S*|--list|-l|--show-origin|--show-scope)(?:\\s|$))",
+      "(?i)\\bgit(?:\\.exe)?\\s[^;|&]*-c\\s+['\\\"]?(?:core\\.(?:hookspath|fsmonitor|sshcommand|pager|editor|askpass)|credential\\.|url\\.|http\\.proxy|include\\.)",
+      "(?i)\\bgit(?:\\.exe)?\\s+remote\\s+(?:add|set-url)\\b",
+      "(?i)\\b(?:npm|pnpm|yarn)(?:\\.cmd)?\\s+config\\s+(?:set|delete|edit)\\b",
+      "(?i)\\bnpm(?:\\.cmd)?\\s+set\\s",
+      "(?i)\\bpip3?(?:\\.exe)?\\s+config\\s+(?:set|unset|edit)\\b",
+      "(?i)\\bdotnet(?:\\.exe)?\\s+nuget\\s+(?:add|update|enable)\\s+source\\b",
+      "(?i)\\bnuget(?:\\.exe)?\\s+sources?\\s+(?:add|update|enable)\\b",
+      "(?i)\\s--(?:registry|index-url|extra-index-url|trusted-host)(?:[= ]|$)",
+      "(?i)\\bdotnet(?:\\.exe)?\\s[^;|&]*\\s(?:-s|--source|--add-source)\\s"
+    ],
+    "gcloud_deny_verbs": [
+      "auth print-access-token",
+      "auth print-identity-token",
+      "auth application-default print-access-token",
+      "auth application-default login",
+      "auth login",
+      "auth activate-service-account",
+      "auth revoke",
+      "iam service-accounts keys create",
+      "config set",
+      "config unset",
+      "config configurations activate",
+      "config configurations create",
+      "secrets versions access"
+    ],
+    "agent_service_account": "",
+    "deny_review_bypass": true,
+    "review_bypass_payload": {
+      "permissionMode": [
+        "auto",
+        "accept-edits",
+        "bypassPermissions",
+        "dangerously-skip-permissions",
+        "always-proceed"
+      ],
+      "agentMode": [
+        "auto",
+        "accept-edits"
+      ],
+      "executionMode": [
+        "auto",
+        "accept-edits"
+      ],
+      "skipPermissions": [
+        true
+      ],
+      "dangerouslySkipPermissions": [
+        true
+      ],
+      "skipPermissionChecks": [
+        true
+      ]
+    },
+    "deny_elevated_session": true,
+    "elevated_groups": [
+      "sudo",
+      "wheel",
+      "admin",
+      "docker",
+      "libvirt",
+      "lxd"
+    ],
+    "audit_classes": [],
+    "mcp_allowed_servers": [],
+    "deny_write_secrets": [
+      {
+        "name": "aws_access_key",
+        "regex": "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b[\\s\\S]{0,300}?(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+=]*[a-z])(?=[A-Za-z0-9/+=]*[A-Z])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])|(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+=]*[a-z])(?=[A-Za-z0-9/+=]*[A-Z])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])[\\s\\S]{0,300}?\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b"
+      },
+      {
+        "name": "gcp_service_account_key",
+        "regex": "(?s)\\A(?=.*\\\"type\\\"\\s*:\\s*\\\"service_account\\\")(?=.*\\\"private_key\\\"\\s*:\\s*\\\"-----BEGIN)"
+      },
+      {
+        "name": "private_key",
+        "regex": "-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----(?:\\s|\\\\[nr])+(?:[A-Za-z0-9+/=]{16,}|Proc-Type:|Version:|Comment:)"
+      },
+      {
+        "name": "github_token",
+        "regex": "\\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{36}\\b|\\bgithub_pat_[A-Za-z0-9_]{50,}"
+      },
+      {
+        "name": "gitlab_token",
+        "regex": "\\bglpat-[A-Za-z0-9_-]{20,}"
+      },
+      {
+        "name": "slack_token",
+        "regex": "\\bxox[baprs]-[A-Za-z0-9-]{10,}"
+      },
+      {
+        "name": "google_api_key",
+        "regex": "\\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])"
+      },
+      {
+        "name": "azure_storage_key",
+        "regex": "(?i)AccountKey=[A-Za-z0-9+/]{60,}={0,2}"
+      },
+      {
+        "name": "jwt",
+        "regex": "\\beyJ(?=[A-Za-z0-9_.-]{97,})[A-Za-z0-9_-]{5,}\\.eyJ[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]{16,}"
+      }
+    ]
+  },
+  "groups": {
+    "agy-dev": {
+      "deny_commands": [],
+      "deny_paths": [],
+      "deny_tools": [],
+      "ask_commands": [
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?rm\\s+(?:[^;|&]*\\s)?(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)(\\s|$|['\\\"])",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?find\\s[^;|&]*\\s(-delete|-exec\\s+(?:\\S*/)?rm)(\\s|$)",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?git\\s+clean\\s[^;|&]*-[a-zA-Z]*f",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?git\\s+(reset\\s+--hard|push\\s[^;|&]*(--force|-f)(\\s|$))",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(rmdir|truncate|dd)(\\s|$)",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(?:(?:npx|pnpx|bunx)\\s+(?:-\\S+\\s+)*)?rimraf(\\s|$)",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(python[0-9.]*|node)\\s+(?:-\\S+\\s+)*-[ce]\\s.*?(?:rmtree|rmSync|rmdirSync|removedirs)\\s*\\("
+      ],
+      "cli_ask_prefixes": [
+        "rm",
+        "rmdir",
+        "truncate",
+        "dd",
+        "shred",
+        "mv",
+        "git clean",
+        "git reset --hard",
+        "git push"
+      ],
+      "ask_as_deny": true
+    },
+    "agy-contractor": {
+      "deny_commands": [
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(curl|wget|rsync|ftp|tftp)(\\s|$)",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?rm\\s+(?:[^;|&]*\\s)?(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)(\\s|$|['\\\"])",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?find\\s[^;|&]*\\s(-delete|-exec\\s+(?:\\S*/)?rm)(\\s|$)",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?git\\s+clean\\s[^;|&]*-[a-zA-Z]*f",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?git\\s+(reset\\s+--hard|push\\s[^;|&]*(--force|-f)(\\s|$))",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(rmdir|truncate|dd)(\\s|$)",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(?:(?:npx|pnpx|bunx)\\s+(?:-\\S+\\s+)*)?rimraf(\\s|$)",
+        "(?:^|[;|&`('\\\"]|\\$\\()\\s*(?:(?:env|command|nohup|time|nice|exec|xargs|timeout\\s+\\S+)(?:\\s+-\\S+)*\\s+|[A-Za-z_]\\w*=\\S*\\s+)*(?:\\S*/)?(python[0-9.]*|node)\\s+(?:-\\S+\\s+)*-[ce]\\s.*?(?:rmtree|rmSync|rmdirSync|removedirs)\\s*\\("
+      ],
+      "deny_paths": [
+        "/data/projects/dev",
+        "/data/projects/shared"
+      ],
+      "deny_tools": [
+        "read_url_content",
+        "search_web",
+        "browser_.*"
+      ],
+      "deny_write_files": [
+        "*.csproj",
+        "*.vbproj",
+        "*.fsproj",
+        "*.props",
+        "*.sln",
+        "package.json"
+      ]
+    }
+  }
+}

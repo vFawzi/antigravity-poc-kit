@@ -1,0 +1,11 @@
+{
+  "gateway": {
+    "enabled": true,
+    "url": "http://127.0.0.1:8443",
+    "apiKey": "managed-by-agy-credproxy-not-a-secret",
+    "wireProtocol": "genai",
+    "customHeaders": {
+      "X-Cost-Center": "@COST_CENTER@"
+    }
+  }
+}

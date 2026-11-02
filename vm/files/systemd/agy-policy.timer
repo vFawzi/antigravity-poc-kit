@@ -1,0 +1,8 @@
+[Unit]
+Description=Simulated MDM - periodic policy re-assertion (drift correction)
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=agy-policy.service
+[Install]
+WantedBy=timers.target

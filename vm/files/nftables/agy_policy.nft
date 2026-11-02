@@ -1,0 +1,45 @@
+#!/usr/sbin/nft -f
+# Per-group egress policy - SSE / host-firewall stand-in (R3 + customer findings: scanning, mail, flooding, site cloning)
+# meta skgid = effective GID of the socket owner (agy-dev=3001, agy-contractor=3002).
+# DEFAULT-DENY for both personas: only loopback (agent -> local credential proxy -> gateway), DNS to the VM resolver
+# and HTTP(S) to per-group allowlisted destinations. Allowlist sets are filled by agy-egress-sync from FQDNs.
+table inet agy_policy {
+  set managed_gids    { type gid; elements = { 3001, 3002 } }
+  set remote_ports    { type inet_service; elements = { 22, 23, 3389, 5900, 5901, 5985, 5986 } }
+  set mail_ports      { type inet_service; elements = { 25, 465, 587, 2525 } }
+  set allow_dev4        { type ipv4_addr; flags timeout; }
+  set allow_contractor4 { type ipv4_addr; flags timeout; }
+  # seat sign-in window: Google front-end ranges, filled only by the operator (make signin-window), elements expire
+  set signin_window4    { type ipv4_addr; flags interval,timeout; auto-merge; }
+
+  chain output {
+    type filter hook output priority 0; policy accept;
+    oif "lo" accept
+
+    # protect the VM service-account token from user/agent processes (metadata server HTTP)
+    meta skgid @managed_gids ip daddr 169.254.169.254 tcp dport 80 counter log prefix "AGY-METADATA-BLOCK " drop
+    # DNS only through the VM resolver (no direct DNS to the internet)
+    meta skgid @managed_gids ip daddr 169.254.169.254 meta l4proto { tcp, udp } th dport 53 accept
+
+    # explicit, separately logged blocks
+    meta skgid @managed_gids tcp dport @mail_ports counter limit rate 10/second log prefix "AGY-MAIL-BLOCK " drop
+    meta skgid @managed_gids tcp dport @remote_ports counter limit rate 10/second log prefix "AGY-NET-BLOCK " drop
+    meta skgid @managed_gids tcp dport @mail_ports drop
+    meta skgid @managed_gids tcp dport @remote_ports drop
+    meta skgid @managed_gids meta l4proto { icmp, ipv6-icmp } counter log prefix "AGY-ICMP-BLOCK " drop
+    meta skgid @managed_gids meta nfproto ipv6 drop
+
+    # flood / scan mitigation: new connections per persona group
+    meta skgid @managed_gids ct state new meter agy_rate { meta skgid limit rate over 20/second burst 40 packets } counter log prefix "AGY-RATE-LIMIT " drop
+    meta skgid @managed_gids ct state established,related accept
+
+    # allowlisted destinations only (HTTP/HTTPS)
+    meta skgid 3001 ip daddr @allow_dev4 tcp dport { 80, 443 } accept
+    meta skgid 3002 ip daddr @allow_contractor4 tcp dport 443 accept
+    meta skgid @managed_gids ip daddr @signin_window4 tcp dport 443 counter log prefix "AGY-SIGNIN-WINDOW " level info accept
+
+    # everything else from a persona is dropped
+    meta skgid @managed_gids counter limit rate 10/second log prefix "AGY-EGRESS-BLOCK " drop
+    meta skgid @managed_gids drop
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "agy-client-mode": "gateway",
+  "agy-egress-allowlist": "{\"agy-contractor\":[],\"agy-dev\":[\"github.com\",\"api.github.com\",\"codeload.github.com\",\"objects.githubusercontent.com\",\"raw.githubusercontent.com\",\"pypi.org\",\"files.pythonhosted.org\",\"registry.npmjs.org\",\"proxy.golang.org\",\"sum.golang.org\"]}",
+  "agy-hosts-pin": "cloudcode-pa.googleapis.com,generativelanguage.googleapis.com,businessaicode.googleapis.com,businessaicode.eu.rep.googleapis.com,businessaicode.us.rep.googleapis.com,aiplatform.googleapis.com,aiplatform.eu.rep.googleapis.com,aiplatform.us.rep.googleapis.com,europe-west4-aiplatform.googleapis.com,us-central1-aiplatform.googleapis.com,consumer-ai.example.com,global.rel.tunnels.api.visualstudio.com,tunnels.api.visualstudio.com,connect.ngrok-agent.com,tunnel.eu.ngrok.com,tunnel.us.ngrok.com,api.ngrok.com,api.trycloudflare.com,region1.v2.argotunnel.com,region2.v2.argotunnel.com,localtunnel.me,loca.lt,bore.pub",
+  "agy-seat-project": "example-agy-project",
+  "agy-seat-location": "eu",
+  "agy-cli-manifest-url": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/windows_amd64.json",
+  "agy-agent-sa": "{}",
+  "agy-corp-script-publisher": "",
+  "agy-package-proxy": "{}"
+}

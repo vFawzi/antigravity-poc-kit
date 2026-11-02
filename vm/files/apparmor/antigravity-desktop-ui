@@ -1,0 +1,100 @@
+# Antigravity Desktop (Electron UI) - ENFORCE.
+# Allow rules derived from complain-mode learning (auditd, 5,400 events: /proc + /sys reads, icon themes, PulseAudio,
+# D-Bus session, Chromium sandbox helper, and a login-shell environment probe). The agent engine
+# (resources/bin/language_server) is confined separately by `antigravity-agent` via a Px transition.
+# deny rules always win over allow rules.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile antigravity-desktop-ui /opt/antigravity/hub/antigravity flags=(attach_disconnected) {
+  include <abstractions/base>
+  include <abstractions/bash>
+  include <abstractions/consoles>
+  include <abstractions/X>
+  include <abstractions/fonts>
+  include <abstractions/freedesktop.org>
+  include <abstractions/gnome>
+  include <abstractions/audio>
+  include <abstractions/dbus-session-strict>
+  include <abstractions/nameservice>
+  include <abstractions/ssl_certs>
+  include <abstractions/user-tmp>
+
+  # ---- Chromium/Electron runtime + sandbox helper
+  userns,
+  capability sys_admin,
+  capability sys_chroot,
+  capability sys_ptrace,
+  capability setuid,
+  capability setgid,
+  ptrace (read, trace) peer=antigravity-desktop-ui,
+  ptrace (read) peer=antigravity-desktop-ui//*,
+  signal (send, receive) peer=antigravity-desktop-ui,
+  signal (send) peer=antigravity-agent,
+  unix,
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+  network unix,
+
+  /opt/antigravity/hub/** mr,
+  /opt/antigravity/hub/antigravity ix,
+  /opt/antigravity/hub/chrome_crashpad_handler ix,
+  /opt/antigravity/hub/chrome-sandbox ix,
+  /opt/antigravity/hub/resources/bin/language_server Px -> antigravity-agent,
+
+  # ---- environment probe (login shell) + harmless helpers - inherit THIS profile (deny list below applies)
+  /usr/bin/{bash,sh,dash,env,groups,id,locale,locale-check,lesspipe,dirname,basename,dircolors,clear_console,uname,tty,stty,tput,cat,which,readlink,xdg-settings,tr,sed,grep,head,cut} rix,
+
+  # ---- system reads
+  @{PROC}/ r,
+  @{PROC}/** r,
+  owner @{PROC}/@{pid}/** rw,
+  /sys/** r,
+  /dev/ r,
+  /dev/dri/** rw,
+  /dev/shm/** rwk,
+  /usr/share/** r,
+  /usr/lib/** mr,
+  /etc/** r,
+  /var/lib/** r,
+  /var/cache/fontconfig/** r,
+  /run/user/*/ r,
+  owner /run/user/*/** rwk,
+
+  # ---- user state (Electron profile, caches, workspace)
+  owner @{HOME}/** rwkl,
+  owner /data/projects/** rwkl,
+  owner /tmp/** rwkl,
+  # MDM policy is root-owned: read-only
+  @{HOME}/.gemini/ r,
+  @{HOME}/.gemini/antigravity-cli/ r,
+  @{HOME}/.gemini/antigravity-cli/settings.json r,
+
+  # ==== deny (same intent as the agent profile)
+  deny /secure-admin/** rwklx,
+  deny /root/** rwklx,
+  deny @{HOME}/.ssh/** rwkl,
+  deny @{HOME}/.gnupg/** rwkl,
+  deny /etc/shadow r,
+  deny /etc/gshadow r,
+  deny /etc/sudoers r,
+  deny /etc/sudoers.d/** r,
+  deny /opt/corp-tools/** rwklx,
+  deny /usr/local/bin/{jamf,nsdiag,vpncli} rwx,
+  deny /opt/google/chrome/** x,
+  deny /usr/bin/google-chrome* x,
+  deny /usr/bin/xdg-open x,
+  deny /opt/google/chrome-remote-desktop/** x,
+  deny /usr/bin/{ssh,scp,sftp,ping,ping4,ping6,nc,nc.openbsd,ncat,netcat,nmap,telnet,xfreerdp,xfreerdp3,rdesktop,remmina,sudo,su,pkexec,doas} x,
+  deny /etc/antigravity/** wkl,
+  deny /etc/agy-credproxy/** rwkl,
+  deny /opt/antigravity/** wkl,
+  deny /opt/agy-credproxy/** wkl,
+  deny @{HOME}/.gemini/antigravity-cli/settings.json wkl,
+  deny /var/cache/fontconfig/** w,
+  deny /tmp/** x,
+  deny /data/** x,
+}

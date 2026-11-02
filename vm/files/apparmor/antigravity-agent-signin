@@ -1,0 +1,43 @@
+# Seat mode only (installed to /etc/apparmor.d/local/antigravity-agent-signin by bootstrap when client_mode=seat).
+# The Desktop app's language server opens the system browser for the Google sign-in. The agent profile denies
+# executing Chrome; this child profile lets xdg-open (and only xdg-open) hand a URL to the browser.
+# Agent tool calls to xdg-open / browsers are denied separately by agy-hook (deny_commands); the browser runs as the
+# persona and stays subject to the persona egress allowlist (nftables), so no additional network reach.
+  /usr/bin/xdg-open Cx -> url_open,
+
+  profile url_open flags=(attach_disconnected) {
+    include <abstractions/base>
+    include <abstractions/bash>
+    include <abstractions/nameservice>
+    include <abstractions/freedesktop.org>
+    include <abstractions/X>
+    include <abstractions/dbus-session-strict>
+
+    # xdg-open is a shell script that probes the desktop (xprop, xdg-mime, which, dbus-send, exo-open/gio ...)
+    /usr/bin/** rix,
+    /usr/lib/** mrix,
+    /usr/libexec/** rix,
+    /usr/share/** r,
+    /etc/** r,
+    @{PROC}/ r,
+    owner @{PROC}/@{pid}/** r,
+    owner @{HOME}/ r,
+    owner @{HOME}/** r,
+    owner @{HOME}/.cache/** rwk,
+    owner /run/user/*/** rwk,
+    /tmp/.X11-unix/* rw,
+    unix,
+    network unix,
+    dbus,
+
+    # the helpers never get IP sockets or network clients: the only way out of this profile is the browser
+    deny network inet,
+    deny network inet6,
+    deny /usr/bin/{curl,wget,nc,nc.openbsd,nc.traditional,ncat,netcat,socat,ssh,scp,sftp,telnet,ftp,rsync,python3*,perl,node} x,
+
+    # antigravity:// callback opened via xdg-open -> managed launcher -> the app in its own Desktop profile
+    /usr/local/bin/antigravity-desktop rix,
+    /opt/antigravity/hub/antigravity Px -> antigravity-desktop-ui,
+    /opt/google/chrome/google-chrome Ux,
+    /opt/google/chrome/chrome Ux,
+  }

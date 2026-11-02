@@ -1,0 +1,27 @@
+// AGY personas (agy-dev, agy-contractor): no admin authentication is ever offered from the desktop.
+// Laptop allowlist for the person at the device (active, local session only - not remote desktop / SSH):
+// Wi-Fi / VPN / network connections, power-off / reboot / suspend / lock. USB mass storage (udisks2) stays denied
+// (DLP decision). colord: colour profiles in remote sessions (no privilege gained).
+// The agent never reaches polkit: its AppArmor profile denies D-Bus.
+
+var AGY_LAPTOP_ACTIONS = [
+  "org.freedesktop.NetworkManager.network-control",
+  "org.freedesktop.NetworkManager.enable-disable-network",
+  "org.freedesktop.NetworkManager.enable-disable-wifi",
+  "org.freedesktop.NetworkManager.enable-disable-wwan",
+  "org.freedesktop.NetworkManager.wifi.scan",
+  "org.freedesktop.NetworkManager.settings.modify.own",
+  "org.freedesktop.NetworkManager.sleep-wake",
+  "org.freedesktop.login1.power-off",
+  "org.freedesktop.login1.reboot",
+  "org.freedesktop.login1.suspend",
+  "org.freedesktop.login1.hibernate",
+  "org.freedesktop.login1.lock-sessions"
+];
+
+polkit.addRule(function (action, subject) {
+  if (!(subject.isInGroup("agy-dev") || subject.isInGroup("agy-contractor"))) { return polkit.Result.NOT_HANDLED; }
+  if (action.id.indexOf("org.freedesktop.color-manager.") === 0) { return polkit.Result.YES; }
+  if (AGY_LAPTOP_ACTIONS.indexOf(action.id) >= 0 && subject.local && subject.active) { return polkit.Result.YES; }
+  return polkit.Result.NO;   // everything else, incl. udisks2 (USB storage), packagekit, systemd units, accounts
+});

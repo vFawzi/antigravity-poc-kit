@@ -1,0 +1,4 @@
+# AGY: developers have no general sudo. The single root action is the allowlisted package installer.
+# Password required (the person at the device); every session is logged with its output.
+Defaults:%agy-dev use_pty, log_output, timestamp_timeout=0, !visiblepw
+%agy-dev ALL=(root) /usr/local/sbin/agy-pkg install *

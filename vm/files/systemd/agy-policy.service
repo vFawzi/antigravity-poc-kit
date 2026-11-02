@@ -1,0 +1,9 @@
+[Unit]
+Description=Simulated MDM - Antigravity policy per group
+After=local-fs.target remote-fs.target
+[Service]
+Type=oneshot
+# no RemainAfterExit: the unit must return to inactive so agy-policy.timer can re-run it (drift correction)
+ExecStart=/usr/local/sbin/agy-policy-apply.sh
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,71 @@
+{
+  "_comment": "AGY version support matrix shipped with each package release. Read by the endpoint bootstrap (deployment policy), V84, the SIEM views, CI and the docs table (python3 scripts/agy_versions.py table). Edit via a reviewed PR only.",
+  "schema": 1,
+  "package": "2.1.0",
+  "minimum": {
+    "cli": {
+      "windows_amd64": "1.4.10",
+      "linux_amd64": "1.4.7"
+    },
+    "desktop": {
+      "windows_x64": "2.24.0"
+    }
+  },
+  "releases": [
+    {
+      "component": "cli",
+      "version": "1.4.11",
+      "platform": "windows_amd64",
+      "status": "supported",
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.4.11-5180209989812224/windows-x64/cli_windows_x64.exe",
+      "sha512": "a70660e829da409d10906fa6120ed79e3dc44a9afde7be6c6b28a10c2cee32e6216cfa49f2c1c8d81d7656df61dcd185b4dd808ca8a65042af4a6e9110b9d604",
+      "tested": "2026-10-30",
+      "evidence": "Windows 11 26H2: clean offline install + persona sandbox test; V71-V83",
+      "notes": "Fixes the Windows sandbox start failure for missing toolchain folders"
+    },
+    {
+      "component": "cli",
+      "version": "1.4.10",
+      "platform": "windows_amd64",
+      "status": "deprecated",
+      "url": "",
+      "sha512": "581d3fad72393696bf2a35b7e66bd1e4ebdf895baa4727107f1b318ddba9f076241cd568a170f287fa89beee829337e88ff36b00455919f0b0ab1bac33c3439d",
+      "tested": "2026-10-30",
+      "evidence": "Windows 11 26H2: persona sandbox test with placeholder folders",
+      "notes": "Windows sandbox needs the placeholder folders (created by the package); upgrade to 1.4.11"
+    },
+    {
+      "component": "cli",
+      "version": "1.4.11",
+      "platform": "linux_amd64",
+      "status": "supported",
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.4.11-5180209989812224/linux-x64/cli_linux_x64.tar.gz",
+      "sha512": "2935601efa745ed6e314d32b415c71f44d9d455f0e6a2583372584be5a9074c28154cf81d5eec65b4416579453a3b3b05d3abe4d4f176754d5ef93a84af6cf28",
+      "tested": "2026-10-30",
+      "evidence": "Linux seat workstation: upgrade install, 54 validation checks incl. V65 sandbox, V82, E2E seat sign-in (S20)",
+      "notes": ""
+    },
+    {
+      "component": "desktop",
+      "version": "2.24.0",
+      "platform": "windows_x64",
+      "status": "supported",
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-hub/2.24.0-5780333019398144/windows-x64/Antigravity-x64.exe",
+      "sha256": "b707cce37f3df44a1b731a4cc88d657114267bb7ca11da9d44ac0a5b791643a3",
+      "tested": "2026-10-30",
+      "evidence": "Windows 11 26H2: installed by the offline installer on both test devices",
+      "notes": ""
+    },
+    {
+      "component": "desktop",
+      "version": "2.28.1",
+      "platform": "windows_x64",
+      "status": "candidate",
+      "url": "",
+      "sha256": "4dc9955a7817b09f5b28c45ed0b2a93e046b5ea9fd6c89b7cbe0fa142dbc1e62",
+      "tested": "",
+      "evidence": "",
+      "notes": "Official installer seen (Google LLC signature valid); distribution URL to be recorded or served from the customer mirror"
+    }
+  ]
+}

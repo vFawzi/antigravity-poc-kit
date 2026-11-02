@@ -1,0 +1,150 @@
+# AppArmor profile for the Antigravity CLI - EDR stand-in (requirements 1, 2, 3)
+# Attaches to the REAL binary (root-owned, integrity-checked). Every child process
+# inherits the profile through `ix`, so built-in file tools, shell commands and
+# scripted wrappers (python subprocess, bash -c, base64 | sh) are all covered.
+# deny rules always win over allow rules.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile antigravity-agent /opt/antigravity/{cli/antigravity,hub/resources/bin/language_server} flags=(attach_disconnected,mediate_deleted) {
+  include <abstractions/base>
+  include <abstractions/bash>
+  include <abstractions/nameservice>
+  include <abstractions/ssl_certs>
+  include <abstractions/python>
+
+  # ---- terminal sandbox (bubblewrap) needs user namespaces + mounts inside them
+  userns,
+  capability sys_admin setuid setgid setpcap sys_chroot net_admin dac_override chown fowner,
+  mount,
+  umount,
+  pivot_root,
+  # the sandbox server lists /tmp and refreshes the CA bundle inside its own mount namespace (verified live, CLI 1.4.7;
+  # without these the terminal tool fails with "connecting to sandbox server: connection reset"). On the host the
+  # persona can't write the root-owned bundle anyway (DAC); exec from /tmp stays denied below.
+  /tmp/ r,
+  /etc/ssl/certs/ca-certificates.crt rwk,
+
+  # ---- network: normal TCP/UDP only (no raw sockets -> no ICMP/SYN tooling)
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+  network unix,
+  deny network raw,
+  deny network packet,
+
+  # ---- program + system read access
+  /opt/antigravity/cli/antigravity mrix,
+  /opt/antigravity/hub/resources/bin/language_server mrix,
+  /opt/antigravity/hub/resources/bin/webm_encoder mrix,
+  /opt/antigravity/hub/** r,
+  /usr/** r,
+  /etc/** r,
+  @{PROC}/** r,
+  /sys/** r,
+  /run/** r,
+  /var/lib/** r,
+  owner @{PROC}/@{pid}/** rw,
+  /dev/null rw,
+  /dev/zero r,
+  /dev/full rw,
+  /dev/tty rw,
+  /dev/pts/* rw,
+  /dev/ptmx rw,
+  /dev/random r,
+  /dev/urandom r,
+  /dev/shm/** rwk,
+  /usr/bin/** ix,
+  /bin/** ix,
+  /usr/sbin/** ix,
+  /usr/lib/** ix,
+  /usr/libexec/** ix,
+  /usr/local/bin/** ix,
+  owner @{HOME}/.gemini/antigravity-cli/bin/** ix,   # CLI-managed helpers (verify with aa-logprof)
+
+  # ---- workspace + application state
+  owner /data/projects/** rwkl,
+  owner @{HOME}/** rwkl,
+  owner /tmp/** rwkl,
+  owner /var/tmp/** rwkl,
+  # MDM policy is root-owned (not matched by the owner rules above): read-only access so the
+  # client actually loads its group policy (without it the client silently falls back to default permissions)
+  @{HOME}/.gemini/ r,
+  @{HOME}/.gemini/antigravity-cli/ r,
+  @{HOME}/.gemini/antigravity-cli/settings.json r,
+  # corporate lifecycle hook (root-owned config + policy, executed by the client)
+  @{HOME}/.gemini/config/ r,
+  @{HOME}/.gemini/config/hooks.json r,
+  # managed MCP server config and browser allowlist (root-owned read-only mounts, same as hooks.json)
+  @{HOME}/.gemini/config/mcp_config.json r,
+  @{HOME}/.gemini/antigravity/ r,
+  @{HOME}/.gemini/antigravity/browserAllowlist.txt r,
+  /etc/antigravity/hooks/** r,
+  /usr/local/libexec/agy-hook rix,
+  /opt/antigravity/cli/ r,
+
+  # ==== Req 1: drives / folders ===============================================
+  deny /secure-admin/** rwklx,
+  deny /secure-admin/ rw,
+  deny /root/** rwklx,
+  deny @{HOME}/.ssh/** rwkl,
+  # agy-persistence: shell startup files, autostart, systemd user units, login environment, user CA store
+  deny @{HOME}/.{bashrc,bash_profile,bash_login,bash_logout,profile,zshrc,zprofile,zshenv,zlogin,pam_environment,xprofile,xsessionrc} wkl,
+  deny @{HOME}/.config/{autostart,systemd,environment.d}/** wkl,
+  deny @{HOME}/.local/share/applications/** wkl,
+  deny @{HOME}/.pki/** wkl,
+  deny @{HOME}/.gnupg/** rwkl,
+  deny /etc/shadow r,
+  deny /etc/gshadow r,
+  deny /etc/sudoers r,
+  deny /etc/sudoers.d/** r,
+  deny /etc/antigravity/** wkl,
+  deny /etc/apparmor.d/** wkl,
+  deny /etc/nftables.d/** wkl,
+  deny /var/log/** w,
+
+  # tamper protection for the MDM-managed policy file and its parents
+  deny @{HOME}/.gemini/antigravity-cli/settings.json wkl,   # agy-tamper
+  deny @{HOME}/.gemini/antigravity-cli/ w,   # agy-tamper
+  deny @{HOME}/.gemini/ w,   # agy-tamper
+  deny @{HOME}/.gemini/config/hooks.json wkl,   # agy-tamper: corporate hooks
+  deny @{HOME}/.gemini/config/mcp_config.json wkl,   # agy-tamper: managed MCP servers
+  deny @{HOME}/.gemini/antigravity/browserAllowlist.txt wkl,   # agy-tamper: managed browser allowlist
+  deny /**/.agents/** wkl,           # agy-tamper: no workspace rules / skills / plugins / hooks written by the agent
+  deny /data/**/.gemini/** wkl,      # project-level agent settings in workspaces
+  deny /data/**/.antigravity/** wkl,
+  deny /usr/local/libexec/agy-hook wkl,
+  deny /opt/antigravity/** wkl,
+  deny /opt/agy-credproxy/** wkl,
+  deny /etc/agy-credproxy/** rwkl,          # device mTLS key + cert: never readable by the agent
+
+  # ==== Req 2: local software (Jamf / Netskope / Cisco stand-ins, Chrome) ======
+  deny /opt/corp-tools/** rwklx,
+  deny /usr/local/bin/{jamf,nsdiag,vpncli} rwx,
+  deny /opt/google/chrome/** x,
+  deny /usr/bin/google-chrome* x,
+  deny /opt/google/chrome-remote-desktop/** x,
+  deny dbus,                                     # no desktop-bus control of other apps
+  deny /tmp/.X11-unix/* rw,                      # no GUI automation of the user's desktop
+  deny ptrace,                                   # cannot inspect/attach to other processes
+  signal (send, receive) peer=antigravity-agent, # may only signal its own process tree
+
+  # ==== Req 3: remote-access / network recon commands ==========================
+  deny /usr/bin/{ssh,scp,sftp,ssh-keyscan,ping,ping4,ping6,nc,nc.openbsd,nc.traditional,ncat,netcat,nmap,telnet,xfreerdp,xfreerdp3,rdesktop,remmina,tracepath,traceroute,arping,hping3,masscan} x,
+  deny /usr/bin/{sudo,su,pkexec,doas} x,
+  # encryption / secure-delete tools: ransomware-like behaviour and DLP evasion (in-process crypto -> EDR)
+  deny /usr/bin/{gpg,gpg2,gpgsm,gpgtar,openssl,age,age-keygen,ccrypt,ccencrypt,mcrypt,7z,7za,7zr,zipcloak,shred,srm,wipe,scrub,cryptsetup,veracrypt} x,
+  deny /usr/sbin/{cryptsetup,wipefs} x,
+
+  # ==== Anti-evasion: no executing binaries copied into writable locations =====
+  deny /tmp/** x,
+  deny /var/tmp/** x,
+  deny /dev/shm/** x,
+  deny /data/** x,
+  deny @{HOME}/[^.]** x,
+
+  # seat mode: Desktop-app Google sign-in may open the browser via xdg-open (file present only when client_mode=seat)
+  include if exists <local/antigravity-agent-signin>
+}

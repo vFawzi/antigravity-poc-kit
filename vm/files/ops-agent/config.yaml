@@ -1,0 +1,47 @@
+# Google Cloud Ops Agent - ships workstation security telemetry to Cloud Logging.
+# Log names (logName suffix) are used by the central sink + log-based metrics.
+logging:
+  receivers:
+    agy_kernel:            # AppArmor DENIED/ALLOWED + nftables AGY-* drops
+      type: files
+      include_paths: [/var/log/kern.log]
+    agy_syslog:            # agy-mdm, agy-launch, agy-bootstrap, agy-hook tags
+      type: files
+      include_paths: [/var/log/syslog, /var/log/auth.log]   # auth.log: sudo (agy-pkg is the only sudo rule)
+    agy_audit:
+      type: files
+      include_paths: [/var/log/audit/audit.log]
+    agy_xrdp:              # persona desktop logins / sessions (xrdp + sesman)
+      type: files
+      include_paths: [/var/log/xrdp.log, /var/log/xrdp-sesman.log]
+    agy_corp_tools:        # must stay EMPTY if requirement 2 holds
+      type: files
+      include_paths: [/var/log/corp-tools.log]
+  processors:
+    agy_filter_syslog:
+      type: exclude_logs
+      match_any:
+        - 'NOT (jsonPayload.message =~ "agy-(mdm|launch|bootstrap|hook|pkg)| sudo(.[0-9]+.)?: ")'
+    agy_filter_kernel:
+      type: exclude_logs
+      match_any:
+        - 'NOT (jsonPayload.message =~ "apparmor=|AGY-")'
+    agy_filter_audit:
+      type: exclude_logs
+      match_any:
+        - 'NOT (jsonPayload.message =~ "apparmor=|agy_priv")'
+  service:
+    pipelines:
+      agy_kernel_pipeline:
+        receivers: [agy_kernel]
+        processors: [agy_filter_kernel]
+      agy_syslog_pipeline:
+        receivers: [agy_syslog]
+        processors: [agy_filter_syslog]
+      agy_audit_pipeline:
+        receivers: [agy_audit]
+        processors: [agy_filter_audit]
+      agy_xrdp_pipeline:
+        receivers: [agy_xrdp]
+      agy_corp_tools_pipeline:
+        receivers: [agy_corp_tools]

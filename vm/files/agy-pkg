@@ -1,0 +1,47 @@
+#!/bin/bash
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# /usr/local/sbin/agy-pkg - the only root action developers get (no general sudo):
+#   sudo agy-pkg install <package> [<package> ...]
+# Installs allowlisted packages only (/etc/antigravity/agy-pkg.allow, managed by IT; ships empty) from the system's
+# configured (corporate / proxied) apt sources, without recommends and without any user-supplied apt options.
+# Note: maintainer scripts of an allowlisted package run as root - the allowlist is the control. The agent can't call
+# it (the hook denies sudo; AppArmor denies the agent reading sudoers).
+set -euo pipefail
+ALLOW=/etc/antigravity/agy-pkg.allow
+caller="${SUDO_USER:-$(id -un)}"
+die() { echo "agy-pkg: $*" >&2; logger -t agy-pkg "DENIED user=$caller reason=$*"; exit 2; }
+
+[[ "$(id -u)" -eq 0 ]] || die "run it as: sudo agy-pkg install <package>"
+[[ "${1:-}" == "install" ]] || die "usage: sudo agy-pkg install <package> [<package> ...]"
+shift
+[[ $# -ge 1 && $# -le 20 ]] || die "give 1-20 package names"
+[[ -s "$ALLOW" ]] || die "no packages are allowlisted on this device - request one through the IT catalog"
+id -nG "$caller" | tr ' ' '\n' | grep -qx agy-dev || die "only developers (agy-dev) may install packages"
+
+pkgs=()
+for p in "$@"; do
+  [[ "$p" =~ ^[a-z0-9][a-z0-9+.-]{1,62}$ ]] || die "invalid package name '$p'"
+  grep -qxF "$p" <(grep -vE '^\s*(#|$)' "$ALLOW" | tr -d ' \t') || die "'$p' is not allowlisted - request it through the IT catalog"
+  pkgs+=("$p")
+done
+
+logger -t agy-pkg "INSTALL user=$caller packages=${pkgs[*]}"
+export DEBIAN_FRONTEND=noninteractive
+if apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confold -- "${pkgs[@]}"; then
+  logger -t agy-pkg "INSTALLED user=$caller packages=${pkgs[*]}"
+else
+  rc=$?; logger -t agy-pkg "FAILED user=$caller packages=${pkgs[*]} rc=$rc"; exit "$rc"
+fi

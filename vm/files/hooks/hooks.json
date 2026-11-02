@@ -1,0 +1,10 @@
+{
+  "corp-policy-gate": {
+    "PreToolUse": [ { "matcher": ".*", "hooks": [ { "type": "command", "command": "/usr/local/libexec/agy-hook PreToolUse", "timeout": 10 } ] } ]
+  },
+  "corp-audit": {
+    "PostToolUse": [ { "matcher": ".*", "hooks": [ { "type": "command", "command": "/usr/local/libexec/agy-hook PostToolUse", "timeout": 10 } ] } ],
+    "SessionStart": [ { "type": "command", "command": "/usr/local/libexec/agy-hook SessionStart", "timeout": 10 } ],
+    "PreInvocation": [ { "type": "command", "command": "/usr/local/libexec/agy-hook PreInvocation", "timeout": 10 } ]
+  }
+}
