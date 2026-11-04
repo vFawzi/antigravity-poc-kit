@@ -534,6 +534,20 @@ poc/poc-gateway.sh --destroy
 
 Runs the installer's destroy (it asks for its own confirmation), then asks `Also delete the device kits and keys (poc-kit/, poc/.state/certs)? (yes/no)`; `yes` shreds the keys and removes the kits and the device registry file.
 
+**Redeploy after destroy.** The destroy prints this note before its confirmation:
+
+| What remains after `--destroy` | For how long |
+|---|---|
+| Log buckets `agy-security`, `agy-audit`, `agy-siem`: pending deletion, names reserved | 7 days |
+| Their CMEK key versions: scheduled for destruction | 24 hours |
+| Key rings: can never be deleted | Always (a redeploy creates a new key ring) |
+
+A redeploy in the **same project** adopts these leftovers automatically, before Terraform changes anything: it restores and re-enables the old key versions, gives the Logging service agent access to the old key again, undeletes the buckets and hands them to Terraform. The buckets then switch to the new key; the old logs stay readable (keep the old key enabled). The preflight shows `leftovers from an earlier deployment` as INFO ("… will undelete/restore and adopt them (logs kept)").
+
+The preflight stops (FAIL) when:
+- a key version is already **destroyed** (more than 24 hours after the destroy): those logs can't be recovered and the bucket names stay reserved until the 7 days end. Options: a new project (cleanest); other names with `log_bucket_id` / `name_prefix` in `terraform/custom.auto.tfvars`; or wait until the 7 days end;
+- the installer lacks the permissions to adopt them: re-run `install/grant-installer.sh` (it prints the manual `gcloud` commands as an alternative).
+
 **8.3**
 
 ```bash
@@ -557,6 +571,7 @@ install/revoke-installer.sh --project my-poc-project --principal user:installer@
 | P02 / M11 FAIL with a TLS error (for example certificate required, unknown CA, handshake failure) | No / wrong client certificate, TLS inspection on the path, or certificate expired | Check `device.crt` / `device.key` in the credential proxy folder, bypass TLS inspection, renew (§7) |
 | `401` `Unmanaged device (fleet_device_unregistered)` | The device isn't in `devices.csv` (or was removed) | Add it and run `poc/poc-gateway.sh --yes` |
 | `503` `AGY policy not applied yet for this user - it applies within a minute of sign-in; try again` | First minute after the first sign-in | Retry after a minute; persistent: Windows check task `AGY-Policy`; macOS `sudo launchctl kickstart -k system/com.google.agy.policy` |
+| `Only buckets in state ACTIVE can be deleted`, or a log bucket "must be replaced", after a redeploy in the same project | The buckets of the earlier deployment are pending deletion (7 days, names reserved) and their keys scheduled for destruction | The installer now undeletes and adopts them automatically before Terraform runs (logs kept). If a key version is already destroyed (more than 24 hours): see [Redeploy after destroy](#9-teardown-in-detail): new project, other names in `terraform/custom.auto.tfvars`, or wait 7 days. Missing permissions: re-run `install/grant-installer.sh` |
 | `server certificate not ACTIVE after 30 min` (§3) | The gateway's server certificate (Certificate Manager, issued by the server CA pool) isn't ready | `gcloud certificate-manager certificates describe agy-gw-server-srv --location europe-west4 --project my-poc-project`; re-run `poc/poc-gateway.sh --yes` |
 | `network problem (often IPv6 from this machine), not permissions: run from Cloud Shell or switch IPv6 off` (underlying error `cannot assign requested address`) | The admin machine's network (often IPv6) | The installer retries automatically; run from Cloud Shell or switch IPv6 off |
 | `terraform not found (run the install first, or poc/poc-gateway.sh --yes)`, or Terraform can't read its state | Not run from the repository folder, or before the installer's own Terraform (in `.tools/bin`) exists | Run from the repository root; re-run `poc/poc-gateway.sh --yes` |

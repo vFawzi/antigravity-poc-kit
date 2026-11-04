@@ -340,3 +340,10 @@ logging.queries.listShared
 artifactregistry.tags.get
 artifactregistry.packages.get
 artifactregistry.dockerimages.get
+# --- adopt leftovers of an earlier deployment in the same project (destroy -> redeploy): restore + re-enable the
+#     CMEK key versions of pending-deletion log buckets before undeleting them; preflight lists AGY key rings
+cloudkms.cryptoKeyVersions.get
+cloudkms.cryptoKeyVersions.restore
+cloudkms.cryptoKeyVersions.update
+cloudkms.cryptoKeys.list
+cloudkms.keyRings.list

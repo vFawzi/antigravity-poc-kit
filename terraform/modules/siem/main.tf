@@ -59,6 +59,11 @@ resource "google_logging_project_bucket_config" "siem" {
     for_each = var.kms_key == null ? [] : [1]
     content { kms_key_name = var.kms_key }
   }
+  lifecycle {
+    # an imported bucket (adopted after destroy -> redeploy) stores project as "projects/<id>", a created one as "<id>":
+    # same project, but the provider would force a replacement (and the bucket name is reserved)
+    ignore_changes = [project]
+  }
 }
 
 resource "google_logging_project_sink" "siem" {

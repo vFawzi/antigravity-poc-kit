@@ -543,6 +543,77 @@ def check_shared_vpc(project: str, region: str, host: str, network: str, subnet:
                 "organisation entry) - confirm with your network team")
 
 
+LOGGING = "https://logging.googleapis.com/v2"
+KMS = "https://cloudkms.googleapis.com/v1"
+ADOPT_PERMS = ["logging.buckets.undelete", "cloudkms.cryptoKeyVersions.restore", "cloudkms.cryptoKeyVersions.update",
+               "cloudkms.cryptoKeyVersions.list", "cloudkms.cryptoKeys.setIamPolicy"]
+
+
+def check_leftovers(project: str, region: str, bucket_ids: list[str], prefix: str, token: str) -> None:
+    """Leftovers of an earlier deployment in this project (destroy -> redeploy): pending-deletion log buckets and
+    AGY key versions scheduled for destruction. Read-only; the installer adopts them before Terraform runs."""
+    check = "leftovers from an earlier deployment"
+    pending: list[tuple[str, dict]] = []
+    for b in bucket_ids:
+        try:
+            d = get_json(f"{LOGGING}/projects/{project}/locations/{region}/buckets/{b}", token)
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                add(check, "WARN", f"cannot read log bucket {b} ({e.code}) - the installer checks again before deploying")
+            continue
+        if d.get("lifecycleState") == "DELETE_REQUESTED":
+            pending.append((b, d))
+    scheduled: list[str] = []
+    destroyed: list[str] = []   # key versions in use by a pending bucket that are already destroyed
+    try:
+        rings = get_json(f"{KMS}/projects/{project}/locations/{region}/keyRings?pageSize=1000", token).get("keyRings", [])
+    except urllib.error.HTTPError:
+        rings = []
+    for r in rings:
+        if not r.get("name", "").rsplit("/", 1)[-1].startswith(f"{prefix}-ring-"):
+            continue
+        try:
+            for k in get_json(f"{KMS}/{r['name']}/cryptoKeys?pageSize=1000", token).get("cryptoKeys", []):
+                for v in get_json(f"{KMS}/{k['name']}/cryptoKeyVersions?pageSize=1000", token).get("cryptoKeyVersions", []):
+                    if v.get("state") == "DESTROY_SCHEDULED":
+                        scheduled.append(v["name"])
+        except urllib.error.HTTPError:
+            continue
+    for b, d in pending:
+        ver = d.get("cmekSettings", {}).get("kmsKeyVersionName", "")
+        if ver:
+            try:
+                if get_json(f"{KMS}/{ver}", token).get("state") in ("DESTROYED", "DESTROY_REQUESTED"):
+                    destroyed.append(f"{b} ({ver.rsplit('/', 3)[-3]}/{ver.rsplit('/', 1)[-1]})")
+            except urllib.error.HTTPError:
+                pass
+    if not pending and not scheduled:
+        add(check, "PASS", "none (no pending-deletion log buckets, no AGY key versions scheduled for destruction)")
+        return
+    found = ", ".join([f"log bucket {b} pending deletion" for b, _ in pending] +
+                      ([f"{len(scheduled)} AGY key version(s) scheduled for destruction"] if scheduled else []))
+    if destroyed:
+        add(check, "FAIL", f"{found}; the key of {', '.join(destroyed)} is already DESTROYED: those logs can't be recovered "
+            "and the names stay reserved until the 7-day pending deletion ends - deploy into a new project, or set "
+            "log_bucket_id / name_prefix to new names in terraform/custom.auto.tfvars")
+        return
+    if not pending:
+        add(check, "INFO", f"{found} - left by an earlier destroy; the new deployment creates its own key ring, nothing "
+            "to adopt (key rings can't be deleted; the versions are destroyed after 24 h)")
+        return
+    g, _ = cp.test(project, ADOPT_PERMS, token)
+    missing = [p for p in ADOPT_PERMS if p not in g]
+    if missing:
+        cmds = [f"gcloud logging buckets undelete {b} --location {region} --project {project}" for b, _ in pending]
+        cmds += [f"gcloud kms keys versions restore {v.rsplit('/', 1)[-1]} --key {v.split('/')[7]} --keyring "
+                 f"{v.split('/')[5]} --location {region} --project {project}  (then: versions enable, same arguments)"
+                 for v in scheduled]
+        add(check, "FAIL", f"{found}; the installer lacks {', '.join(missing)} to adopt them - re-run "
+            f"install/grant-installer.sh, or an admin runs: " + " ; ".join(cmds))
+        return
+    add(check, "INFO", f"{found} - the installer will undelete/restore and adopt them (logs kept)")
+
+
 def check_region(region: str, zone: str) -> None:
     eu = region.startswith("europe-") and region not in ("europe-west2", "europe-west6")  # London, Zurich: non-EU
     add("region", "PASS" if eu else "WARN",
@@ -598,6 +669,9 @@ def main() -> int:
     ap.add_argument("--shared-vpc-host-project", default="")
     ap.add_argument("--shared-vpc-network", default="")
     ap.add_argument("--shared-vpc-subnet", default="")
+    ap.add_argument("--leftover-bucket", action="append", default=[],
+                    help="fixed-name log bucket this configuration manages (leftovers check)")
+    ap.add_argument("--name-prefix", default="agy")
     ap.add_argument("--report", default=str(pathlib.Path(__file__).resolve().parent.parent / "preflight-report.md"))
     args = ap.parse_args()
     if not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", args.project):
@@ -620,6 +694,9 @@ def main() -> int:
             guarded("billing", check_billing, args.project, token)
             guarded("org policies", check_org_policies, args.project, args.region, args.mtls, token)
             guarded(f"org policy {INVOKER_CONSTRAINT}", check_invoker_iam, args.project, token)
+            if args.leftover_bucket:
+                guarded("leftovers from an earlier deployment", check_leftovers, args.project, args.region,
+                        args.leftover_bucket, args.name_prefix, token)
             if args.network_mode == "shared":
                 guarded("shared VPC", check_shared_vpc, args.project, args.region, args.shared_vpc_host_project,
                         args.shared_vpc_network, args.shared_vpc_subnet, token)

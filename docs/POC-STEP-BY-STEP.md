@@ -241,7 +241,7 @@ Send the files to the POC lead.
 | # | Who | Do | You should see |
 |---|---|---|---|
 | 1 | Endpoint admin | Windows: `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Uninstall`; Mac: `sudo bash /usr/local/libexec/agy/install-macos.sh --uninstall` | The final test shows `P00 Not installed` as `PASS` |
-| 2 | Cloud admin | `poc/poc-gateway.sh --destroy`, confirm, then answer `yes` to delete the kits and keys | Cloud resources, kits and keys removed |
+| 2 | Cloud admin | `poc/poc-gateway.sh --destroy`, confirm, then answer `yes` to delete the kits and keys | Cloud resources, kits and keys removed Redeploying later in the same project? Within 24 hours the installer recovers the old log buckets automatically; a new project is the cleanest fresh start ([details](POC-TECHNICAL-REFERENCE.md#9-teardown-in-detail)) |
 | 3 | Project admin | `install/revoke-installer.sh --project my-poc-project --principal user:installer@example.com` | Installer role removed |
 | 4 | Billing admin | Console: **Billing → Account management** → remove the installer | Role removed |
 | 5 | Network team | Remove the VPN | — |

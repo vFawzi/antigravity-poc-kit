@@ -1,0 +1,45 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+terraform/terraform.tfvars
+terraform/backend.hcl
+.install/
+fleet-certs/
+.tools/
+install.conf
+preflight-report.md
+install-report.md
+TESTING.md
+testing.env
+terraform/custom.auto.tfvars
+terraform/terraform.tfvars.pre-installer.*
+terraform/zz-adopt-imports.tf
+terraform/zz-template-suffix.auto.tfvars
+# Python
+**/.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+# Secrets / local
+.env
+*.pem
+*.key
+*.p12
+credentials*.json
+*service-account*.json
+.crd-pin-*
+# Artifacts
+*.tgz
+*.tar.gz
+*.deb
+.DS_Store
+release/
+# POC outputs - never commit
+poc/.state/
+poc-kit/
+poc/devices.csv
+terraform/poc.auto.tfvars
+*.zip

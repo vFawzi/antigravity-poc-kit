@@ -16,6 +16,8 @@ Never Owner or Editor. Choose one option; the installer's preflight checks every
 | `install/installer_iam.py show --project <id> --principal user:<installer>` | Shows the current grant |
 | `install/revoke-installer.sh --project <id> --principal user:<installer>` | Right after the setup (the grant also expires on its own, default 8 hours): removes exactly these bindings and deletes the custom role (`--keep-role` keeps it) |
 
+The role includes five KMS permissions for a redeploy after a destroy (adopting the old log buckets and their keys): `cloudkms.cryptoKeyVersions.get`, `cloudkms.cryptoKeyVersions.restore`, `cloudkms.cryptoKeyVersions.update`, `cloudkms.cryptoKeys.list`, `cloudkms.keyRings.list`. Installer grants made before they were added must be re-run with `install/grant-installer.sh`.
+
 IAM propagation after the grant takes about 2–5 minutes and is intermittent at first (some calls pass, some get `403`): wait a few minutes before `poc/poc-gateway.sh`. Terraform apply is retried 3 times automatically; if a `403` persists, re-run `poc/poc-gateway.sh --yes` (idempotent).
 
 Before the grant, the script enables the bootstrap APIs on the project (Cloud Resource Manager, IAM, Service Usage) and waits for them; this needs Service Usage Admin (`roles/serviceusage.serviceUsageAdmin`; an Owner has it) and a linked billing account. If it can't, it prints the exact `gcloud services enable … --project <id>` command.

@@ -22,7 +22,7 @@ FAIL=0
 hit() { echo "  ✗ $1"; FAIL=1; }
 
 echo "== forbidden files"
-while IFS= read -r f; do hit "$f"; done < <(find . \( -name '*.tfstate' -o -name '*.tfstate.*' -o -name 'terraform.tfvars' -o -name '.terraform' \
+while IFS= read -r f; do hit "$f"; done < <(find . \( -name '*.tfstate' -o -name '*.tfstate.*' -o -name 'terraform.tfvars' -o -name 'zz-adopt-imports.tf' -o -name 'zz-template-suffix.auto.tfvars' -o -name '.terraform' \
   -o -name '.venv' -o -name '__pycache__' -o -name '.pytest_cache' -o -name '.crd-pin-*' -o -name '*.pem' -o -name '*.key' \
   -o -name '*.p12' -o -name '*.tgz' -o -name '*.tar.gz' -o -name '*.deb' -o -name '.env' -o -name 'credentials*.json' \
   -o -name '*service-account*.json' -o -iname '*.docx' -o -iname '*.doc' -o -iname '*.xlsx' -o -iname '*.xls' \
